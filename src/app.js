@@ -168,7 +168,7 @@ function draw(){
   const flicker=Math.sin(game.time*7+x)*3;path([[x-7,y-46],[x-5,y-58],[x+flicker,y-69],[x+7,y-55],[x+5,y-46]],'#d1a86b');path([[x-3,y-46],[x,y-58],[x+3,y-46]],'#eee0ad');
  }
  for(const g of game.gems){if(g.x<minX||g.x>maxX||g.y<minY||g.y>maxY)continue;const r=g.value>1?6:4;path([[g.x,g.y-r-2],[g.x+r,g.y],[g.x,g.y+r+2],[g.x-r,g.y]],g.value>1?'#d3b46c':'#76b3a5','#c3dfc18a');}
- for(const e of game.enemies)if(e.telegraph>0){const pulse=(1.1-e.telegraph)/1.1;circle(e.targetX,e.targetY,95,'#d4695d1a','#dc7d69');circle(e.targetX,e.targetY,95*pulse,null,'#dcb797');}
+ for(const e of game.enemies)if(e.telegraph>0){const radius=e.attackRadius||95,pulse=1-e.telegraph/(e.windup||1.1);circle(e.targetX,e.targetY,radius,'#d4695d1a','#dc7d69');circle(e.targetX,e.targetY,radius*pulse,null,'#dcb797');}
  const entities=[...game.enemies.map(e=>({...e,isPlayer:false})),{...p,isPlayer:true}].sort((a,b)=>a.y-b.y);
  for(const e of entities){if(e.x<minX-60||e.x>maxX+60||e.y<minY-60||e.y>maxY+60)continue;if(e.isPlayer)drawPlayer(e);else drawEnemy(e);}
  for(const b of game.projectiles){ctx.strokeStyle=b.color;ctx.lineWidth=b.r;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(b.x-b.vx*.03,b.y-b.vy*.03);ctx.lineTo(b.x,b.y);ctx.stroke();circle(b.x,b.y,b.r*.7,'#e6dec0');}

@@ -26,7 +26,7 @@ export function resolveChoices(game){
 }
 function danger(game,x,y){
  let score=0;for(const e of game.enemies){if(e.hp<=0)continue;const d=Math.hypot(x-e.x,y-e.y);score+=Math.max(0,e.r+game.player.r+30-d);
-  if(e.telegraph>0&&e.telegraph<.4&&Math.hypot(x-e.targetX,y-e.targetY)<110)score+=180;
+  if(e.telegraph>0&&e.telegraph<.4&&Math.hypot(x-e.targetX,y-e.targetY)<(e.attackRadius||95)+game.player.r)score+=180;
  }
  for(const b of game.enemyShots){if(b.life<=0)continue;const speed=b.vx*b.vx+b.vy*b.vy;if(!speed)continue;const t=clamp(((x-b.x)*b.vx+(y-b.y)*b.vy)/speed,0,.3);if(Math.hypot(x-b.x-b.vx*t,y-b.y-b.vy*t)<b.r+game.player.r+8)score+=50;}
  return score;

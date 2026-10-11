@@ -49,3 +49,13 @@ test('full inventory keeps equipped gear and newest rewards',()=>{
 test('corrupt combat snapshots fail safely instead of resuming invalid state',()=>{
  const p=defaultProfile(),valid=makeGame().snapshot();for(const mutate of [s=>s.player.x=null,s=>s.player.maxHp=0,s=>s.floor=1.5,s=>s.enemyShots=null,s=>s.skills={power:999},s=>{s.state='choosing';s.choices=['unknown'];},s=>s.enemies=[{x:null,y:1}]]){const snapshot=structuredClone(valid);mutate(snapshot);assert.equal(Game.restore(p,snapshot),null);}assert.ok(Game.restore(p,valid));
 });
+test('five floor bosses have distinct telegraphs, rage patterns and resumable attacks',()=>{
+ const signatures=new Set();for(let floor=1;floor<=5;floor++){
+  const p=defaultProfile(),g=new Game(p,{floor,seed:42});g.spawnClock=100;g.attackClock=100;
+  const boss=g.spawn('boss');boss.cooldown=0;g.update(.01);const normalCount=g.enemyShots.length;
+  assert.ok(boss.attackRadius>0);assert.equal(boss.telegraph,boss.windup);signatures.add(`${boss.attackRadius}/${normalCount}/${boss.cooldown}`);
+  const restored=Game.restore(p,g.snapshot());assert.equal(restored.enemies[0].attackRadius,boss.attackRadius);assert.equal(restored.enemies[0].windup,boss.windup);
+  boss.hp=boss.maxHp*.4;boss.telegraph=0;boss.cooldown=0;g.enemyShots=[];g.update(.01);assert.equal(g.enemyShots.length,normalCount+4);
+  boss.telegraph=.001;boss.targetX=g.player.x+boss.attackRadius+g.player.r-1;boss.targetY=g.player.y;g.player.invulnerable=0;const hp=g.player.hp;g.update(.01);assert.ok(g.player.hp<hp);
+ }assert.equal(signatures.size,5);
+});

@@ -6,6 +6,13 @@ export const FLOORS = [
  {name:'침묵의 심연',subtitle:'빛을 삼키는 오래된 그림자',color:'#827091'},
  {name:'혼돈의 왕좌',subtitle:'탑의 마지막 수문장',color:'#ae925d'}
 ];
+export const BOSS_PATTERNS = [
+ {name:'문지기의 파동',radius:95,windup:1.1,interval:3.1,shots:8,speed:115},
+ {name:'회랑의 나선',radius:80,windup:.9,interval:2.8,shots:12,speed:125},
+ {name:'성소의 폭발',radius:135,windup:1.4,interval:3.8,shots:6,speed:155},
+ {name:'심연의 추격',radius:105,windup:1,interval:2.6,shots:10,speed:140},
+ {name:'왕좌의 혼돈',radius:120,windup:1.2,interval:3,shots:16,speed:130}
+];
 export const HEROES = {
  knight:{name:'기사',role:'근접 · 생존',icon:'sword',color:'#cbae73',hp:140,damage:23,speed:172,interval:.62,range:100},
  mage:{name:'술사',role:'원거리 · 광역',icon:'flame',color:'#86b9aa',hp:100,damage:20,speed:180,interval:.75,range:390},
@@ -148,9 +155,9 @@ export class Game {
   if(this.state!=='playing')return;
   for(const e of this.enemies){
    if(e.hp<=0)continue;e.hit=Math.max(0,e.hit-dt);e.slow=Math.max(0,e.slow-dt);e.cooldown-=dt;
-   if(e.telegraph>0){e.telegraph-=dt;if(e.telegraph<=0){this.addEffect('ring',e.targetX,e.targetY,95,'#d96b62',.45);if(distance(p,{x:e.targetX,y:e.targetY})<95)this.hitPlayer(e.damage*1.5);}}
+   if(e.telegraph>0){e.telegraph-=dt;if(e.telegraph<=0){this.addEffect('ring',e.targetX,e.targetY,e.attackRadius||95,'#d96b62',.45);if(distance(p,{x:e.targetX,y:e.targetY})<(e.attackRadius||95)+p.r)this.hitPlayer(e.damage*1.5);}}
    else{const d=distance(e,p)||1;if(e.type!=='caster'||d>235){e.x+=(p.x-e.x)/d*e.speed*(e.slow>0?.38:1)*dt;e.y+=(p.y-e.y)/d*e.speed*(e.slow>0?.38:1)*dt;}
-    if(e.type==='boss'&&e.cooldown<=0){e.targetX=p.x;e.targetY=p.y;e.telegraph=1.1;e.cooldown=3.1;for(let i=0;i<8;i++){const a=i*Math.PI/4+this.time;this.enemyShots.push({x:e.x,y:e.y,vx:Math.cos(a)*115,vy:Math.sin(a)*115,r:7,damage:13,life:4});}}
+    if(e.type==='boss'&&e.cooldown<=0){const pattern=BOSS_PATTERNS[this.floor-1],enraged=e.hp/e.maxHp<=.4;e.targetX=p.x;e.targetY=p.y;e.attackRadius=pattern.radius;e.windup=pattern.windup;e.telegraph=e.windup;e.cooldown=pattern.interval*(enraged?.75:1);const count=pattern.shots+(enraged?4:0),speed=pattern.speed*(enraged?1.15:1);for(let i=0;i<count;i++){const a=i*Math.PI*2/count+this.time;this.enemyShots.push({x:e.x,y:e.y,vx:Math.cos(a)*speed,vy:Math.sin(a)*speed,r:7,damage:Math.round(e.damage*.62),life:4});}}
     if(e.type==='caster'&&e.cooldown<=0){const a=Math.atan2(p.y-e.y,p.x-e.x);this.enemyShots.push({x:e.x,y:e.y,vx:Math.cos(a)*145,vy:Math.sin(a)*145,r:5,damage:e.damage,life:3.5});e.cooldown=3;}
    }if(distance(e,p)<e.r+p.r)this.hitPlayer(e.damage);
   }
