@@ -5,3 +5,5 @@
 @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 
 .boss-direction{position:absolute;transform:translate(-50%,-50%);display:grid;justify-items:center;pointer-events:none;color:#f2a39b;text-shadow:0 2px 6px #000}.boss-direction b{font-size:24px;display:block}.boss-direction span{font-size:10px}.build-list{max-height:30dvh;overflow:auto;border-block:1px solid var(--line);margin:16px 0;padding:8px 0}.build-list strong{font-size:12px;color:var(--teal)}.build-list p{font-size:11px!important;margin:5px 0 12px!important}.skill-tray{gap:4px;flex-wrap:wrap;padding:0 16px}
+
+.build-info{border-top:1px solid var(--line);padding-top:14px;margin-top:20px!important;font-size:10px!important;color:var(--muted)!important}.build-info time{font-variant-numeric:tabular-nums;display:inline-block;margin-top:5px}

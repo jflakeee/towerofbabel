@@ -1,6 +1,11 @@
-import {mkdir,copyFile,cp,rm} from 'node:fs/promises';
+import {mkdir,copyFile,cp,rm,readFile,writeFile} from 'node:fs/promises';
 await rm('dist',{recursive:true,force:true});
 await mkdir('dist');
 for(const file of ['index.html','styles.css','manifest.webmanifest','sw.js']) await copyFile(file,`dist/${file}`);
 for(const dir of ['src','assets']) await cp(dir,`dist/${dir}`,{recursive:true});
-console.log('Static application built in dist/');
+const builtAt=new Date().toISOString();
+const app=await readFile('dist/src/app.js','utf8');
+await writeFile('dist/src/app.js',app.replace('__BUILD_TIME__',builtAt));
+const worker=await readFile('dist/sw.js','utf8');
+await writeFile('dist/sw.js',worker.replace("babel-mobile-v2",`babel-mobile-${builtAt}`));
+console.log(`Static application built in dist/ at ${builtAt}`);
