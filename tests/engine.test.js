@@ -28,7 +28,7 @@ test('invalid profile values and stale equipment are repaired on load',()=>{
  const p=loadProfile({version:1,gold:-5,unlocked:99,selectedHero:'x',upgrades:{power:99},inventory:[{slot:'weapon',value:NaN}],equipped:{weapon:'missing'}});assert.equal(p.gold,0);assert.equal(p.unlocked,5);assert.equal(p.selectedHero,'knight');assert.equal(p.upgrades.power,10);assert.equal(p.inventory.length,0);assert.equal(p.equipped.weapon,null);
 });
 test('gear and permanent upgrades modify next-run base stats only',()=>{
- const p=defaultProfile();p.inventory=[{id:'w',slot:'weapon',value:9},{id:'a',slot:'armor',value:20},{id:'c',slot:'charm',value:12}];p.equipped={weapon:'w',armor:'a',charm:'c'};p.upgrades.power=2;p.upgrades.health=3;assert.deepEqual(equippedStats(p),{damage:9,hp:20,crit:.12,haste:0,magnet:0,fortune:0,fire:0,ice:0,lightning:0});const g=new Game(p);assert.equal(g.player.maxHp,196);assert.equal(g.player.damage,23*1.16+9);assert.ok(Math.abs(g.player.crit-.17)<1e-12);
+ const p=defaultProfile();p.inventory=[{id:'w',slot:'weapon',value:9},{id:'a',slot:'armor',value:20},{id:'c',slot:'charm',value:12}];p.equipped={weapon:'w',armor:'a',charm:'c'};p.upgrades.power=2;p.upgrades.health=3;assert.deepEqual(equippedStats(p),{damage:9,hp:20,crit:.12,haste:0,magnet:0,fortune:0,fire:0,ice:0,lightning:0,echo:0,regen:0,novaHaste:0});const g=new Game(p);assert.equal(g.player.maxHp,196);assert.equal(g.player.damage,23*1.16+9);assert.ok(Math.abs(g.player.crit-.17)<1e-12);
 });
 test('full simulation stays finite and bounded for every class',()=>{
  for(const hero of ['knight','mage','ranger']){const g=makeGame(78,hero);g.player.hp=g.player.maxHp=1e7;for(let i=0;i<3100&&g.state!=='won'&&g.state!=='lost';i++){while(g.state==='choosing')g.choose(g.choices.find(id=>['fire','lightning','power','orbit'].includes(id))||g.choices[0]);const angle=i*.012;g.update(.05,{x:Math.cos(angle),y:Math.sin(angle)});if(g.novaCd===0)g.nova();assert.ok(Number.isFinite(g.player.hp));assert.ok(g.enemies.length<=101);assert.ok(g.gems.length<=351);}assert.ok(g.bossSpawned);assert.ok(['won','lost'].includes(g.state));}
@@ -38,8 +38,9 @@ test('manual nova can end a boss fight outside the update loop',()=>{
 });
 test('first floor is beatable by each unupgraded hero with movement and active skills',()=>{
  for(const hero of ['knight','mage','ranger']){const g=makeGame(1,hero);for(let i=0;i<3100&&['playing','choosing'].includes(g.state);i++){
-  while(g.state==='choosing')g.choose(['vitality','fire','orbit','lightning','power','magnet','crit','haste','ice'].find(id=>g.choices.includes(id)));
-  let x=Math.cos(i*.06),y=Math.sin(i*.06);const boss=g.enemies.find(e=>e.type==='boss');if(boss){const dx=boss.x-g.player.x,dy=boss.y-g.player.y,d=Math.hypot(dx,dy)||1,range=hero==='knight'?65:170;if(boss.telegraph>0&&Math.hypot(g.player.x-boss.targetX,g.player.y-boss.targetY)<110){x=-dy/d;y=dx/d;if(g.dashCd===0)g.dash({x,y});}else if(d>range+10){x=dx/d;y=dy/d;}else if(d<range-10){x=-dx/d;y=-dy/d;}else{x=-dy/d;y=dx/d;}}
+  while(g.state==='choosing')g.choose(['vitality','fire','orbit','lightning','power','magnet','crit','haste','ice'].find(id=>g.choices.includes(id))||g.choices[0]);
+  // Slower orbit respects the newly added pillars.
+  let x=Math.cos(i*.025),y=Math.sin(i*.025);const boss=g.enemies.find(e=>e.type==='boss');if(boss){const dx=boss.x-g.player.x,dy=boss.y-g.player.y,d=Math.hypot(dx,dy)||1,range=hero==='knight'?65:170;if(boss.telegraph>0&&Math.hypot(g.player.x-boss.targetX,g.player.y-boss.targetY)<110){x=-dy/d;y=dx/d;if(g.dashCd===0)g.dash({x,y});}else if(d>range+10){x=dx/d;y=dy/d;}else if(d<range-10){x=-dx/d;y=-dy/d;}else{x=-dy/d;y=dx/d;}}
   g.update(.05,{x,y});if(g.novaCd===0)g.nova();
  }assert.equal(g.state,'won',`${hero} should have a viable first-floor path`);}
 });

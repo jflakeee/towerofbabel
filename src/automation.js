@@ -1,18 +1,19 @@
 import {normalizeAutomation} from './content.js';
-import {SKILLS,clamp} from './engine.js';
+import {SKILLS,clamp,availableSkills} from './engine.js';
+import {isWalkable,clearLine} from './world.js';
 export const STRATEGIES={balanced:'균형',survival:'생존',attack:'공격',farming:'파밍',custom:'직접 편집'};
 export function rankChoices(game){
- const base={power:6,haste:5,fire:9,ice:5,lightning:9,orbit:7,magnet:4,vitality:3,crit:4};
- const a=normalizeAutomation(game.automation),valid=game.choices.filter(id=>SKILLS.some(s=>s.id===id&&(game.skills[id]||0)<s.max)),allowed=valid.filter(id=>!a.excluded.includes(id)),fallback=!allowed.length;
+ const base={power:6,haste:5,fire:9,ice:5,lightning:9,orbit:7,magnet:4,vitality:3,crit:4,guardian:8,cleave:8,focus:8,meteor:10,barrage:9,pierce:8};
+ const a=normalizeAutomation(game.automation),valid=game.choices.filter(id=>availableSkills(game).some(s=>s.id===id&&(game.skills[id]||0)<s.max)),allowed=valid.filter(id=>!a.excluded.includes(id)),fallback=!allowed.length;
  return (fallback?valid:allowed).map(id=>{
   let score=base[id],reason='현재 빌드의 전투 효율';const mode=game.autoStrategy||'balanced';
   if(id==='vitality'&&game.player.hp/game.player.maxHp<.45){score+=18;reason='부족한 체력 회복';}
-  if(mode==='survival'&&['vitality','ice','orbit'].includes(id)){score+=7;reason='생존 우선 설정';}
-  if(mode==='attack'&&['power','haste','fire','lightning','crit'].includes(id)){score+=5;reason='공격 우선 설정';}
+  if(mode==='survival'&&['vitality','ice','orbit','guardian'].includes(id)){score+=7;reason='생존 우선 설정';}
+  if(mode==='attack'&&['power','haste','fire','lightning','crit','cleave','focus','meteor','barrage','pierce'].includes(id)){score+=5;reason='공격 우선 설정';}
   if(mode==='farming'&&id==='magnet'&&!game.bossSpawned){score+=12;reason='경험치 수집 우선 설정';}
   if(id==='magnet'&&game.bossSpawned)score-=8;
   if(id==='orbit'&&game.hero==='knight')score+=3;
-  const type=['vitality','ice'].includes(id)?'survival':id==='magnet'?'growth':'damage';score*=a.weights[type];score+=(game.skills[id]||0)*.4+(a.priority[id]||0)*3;if(a.priority[id])reason='사용자 우선순위 반영';if(['fire','ice','lightning'].includes(id))score+=(game.gearStats?.[id]||0)*.2;if(fallback)reason='제외 목록으로 후보 없음 · 유효 후보 대체';
+  const type=['vitality','ice','guardian'].includes(id)?'survival':id==='magnet'?'growth':'damage';score*=a.weights[type];score+=(game.skills[id]||0)*.4+(a.priority[id]||0)*3;if(a.priority[id])reason='사용자 우선순위 반영';if(['fire','ice','lightning'].includes(id))score+=(game.gearStats?.[id]||0)*.2;if(fallback)reason='제외 목록으로 후보 없음 · 유효 후보 대체';
   return {id,score,reason};
  }).sort((a,b)=>b.score-a.score||a.id.localeCompare(b.id));
 }
@@ -33,13 +34,13 @@ function danger(game,x,y){
 }
 export function automateAbilities(game,input){
  if(game.state!=='playing')return;
- const a=normalizeAutomation(game.automation),p=game.player,near=game.enemies.filter(e=>e.hp>0&&Math.hypot(e.x-p.x,e.y-p.y)<230);
+ const a=normalizeAutomation(game.automation),p=game.player,near=game.enemies.filter(e=>e.hp>0&&Math.hypot(e.x-p.x,e.y-p.y)<230&&clearLine(game,p,e));
  if(game.novaCd<=0&&(near.length>=a.novaCount||(p.hp/p.maxHp<.35&&near.length>=2)||near.some(e=>e.type==='boss')))game.nova();
  if(game.state!=='playing'||game.dashCd>0||p.invulnerable>0||danger(game,p.x,p.y)<({cautious:15,normal:25,bold:40}[a.dodge]))return;
  const mag=Math.hypot(input.x,input.y),dirs=[];if(mag)dirs.push({x:input.x/mag,y:input.y/mag});
  for(let i=0;i<8;i++)dirs.push({x:Math.cos(i*Math.PI/4),y:Math.sin(i*Math.PI/4)});
  let best=null,bestScore=Infinity;for(const [i,d] of dirs.entries()){
-  const x=p.x+d.x*120,y=p.y+d.y*120;if(x<35||x>1565||y<35||y>1565)continue;
+  const x=p.x+d.x*120,y=p.y+d.y*120;if(!isWalkable(game,x,y,p.r)||!clearLine(game,p,{x,y},p.r))continue;
   const score=danger(game,x,y)+(mag&&i!==0?8:0);if(score<bestScore){best=d;bestScore=score;}
  }if(best&&bestScore<danger(game,p.x,p.y))game.dash(best);
 }
