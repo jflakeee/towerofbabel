@@ -28,3 +28,7 @@
 .joystick>span{position:absolute;left:0;right:0;bottom:-19px;text-align:center;font-size:10px;color:#abc0b4aa;pointer-events:none}
 .controls{left:max(26px,env(safe-area-inset-left));right:max(26px,env(safe-area-inset-right));bottom:calc(30px + env(safe-area-inset-bottom))}
 @media(max-height:500px) and (orientation:landscape){.joystick{width:132px;height:132px}.controls{bottom:max(24px,env(safe-area-inset-bottom))}}
+
+/* The movement origin follows the first touch anywhere in the battle viewport. */
+.battle .joystick{position:fixed;left:0;top:0;transform:translate(-50%,-50%);visibility:hidden;pointer-events:none;z-index:2}
+.battle .joystick.active{visibility:visible}

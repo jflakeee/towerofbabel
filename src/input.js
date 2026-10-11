@@ -4,7 +4,7 @@ export class MobileJoystick {
  reset(){this.pointerId=null;this.x=0;this.y=0;this.dx=0;this.dy=0;}
  begin(id,x,y,rect){
   if(this.pointerId!==null)return false;
-  this.pointerId=id;this.cx=rect.left+rect.width/2;this.cy=rect.top+rect.height/2;
+  this.pointerId=id;this.cx=x;this.cy=y;
   this.radius=Math.max(1,Math.min(rect.width,rect.height)*.3);
   this.move(id,x,y);return true;
  }
