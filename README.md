@@ -58,6 +58,7 @@ PC 조작: WASD 또는 방향키 이동, Space 회피, E 폭발, Esc 일시정�
 | `docs/research.md` | 출처, 영상 챕터 분석, 모바일 구현 대응표 |
 | `docs/verification.md` | 실제 검증 결과와 미검증 범위 |
 | `docs/benchmark-parity-plan.md` | 원작 대응 차이, 필요한 자료, 구현 순서와 완료 조건 |
+| `docs/mobile-autopilot-design.md` | 이동만 조작하는 모바일 전용 자동화·커스텀·재화 재설정 설계(구현 예정) |
 
 ## 범위
 
