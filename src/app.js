@@ -93,7 +93,12 @@ function updateHud(){
  $('timer').textContent=game.bossSpawned?`보스 제한 ${formatTime(Math.max(0,150-game.time))}`:`${formatTime(game.time)} / 01:30`;
  const boss=game.enemies.find(e=>e.id===game.bossId);$('boss-hud').hidden=!boss;if(boss)$('boss-fill').style.width=`${Math.max(0,boss.hp/boss.maxHp*100)}%`;
  const marker=$('boss-direction');marker.hidden=true;if(boss&&boss.hp>0){const dx=(boss.x-p.x)*zoom,dy=(boss.y-p.y)*zoom;const rx=Math.max(30,w/2-45),ry=Math.max(30,h/2-70);if(Math.abs(dx)>rx||Math.abs(dy)>ry){const scale=Math.min(rx/(Math.abs(dx)||1),ry/(Math.abs(dy)||1));marker.hidden=false;marker.style.left=`${w/2+dx*scale}px`;marker.style.top=`${h/2+dy*scale}px`;marker.querySelector('b').style.transform=`rotate(${Math.atan2(dy,dx)}rad)`;}}
- $('dash-cd').textContent=game.dashCd>0?Math.ceil(game.dashCd):'';$('nova-cd').textContent=game.novaCd>0?Math.ceil(game.novaCd):'';
+ const active=['playing','choosing'].includes(game.state),lowHp=active&&p.hp>0&&p.hp/p.maxHp<=.25,urgent=active&&game.bossSpawned&&150-game.time<=15;
+ $('battle').classList.toggle('low-health',lowHp);$('timer').classList.toggle('urgent',urgent);
+ const warning=$('combat-warning'),warningText=[lowHp?'체력 부족 · 회피로 거리를 벌리세요':'',urgent?'시간 임박 · 수문장을 처치하세요':''].filter(Boolean).join(' / ');
+ warning.hidden=!warningText;if(warning.textContent!==warningText)warning.textContent=warningText;
+ for(const [id,cd,label] of [['dash',game.dashCd,'회피'],['nova',game.novaCd,'영혼 폭발']]){const ready=cd<=0&&game.state==='playing';$(id+'-cd').textContent=cd>0?Math.ceil(cd):'';$(id).classList.toggle('ready',ready);$(id).setAttribute('aria-label',`${label} · ${cd>0?Math.ceil(cd)+'초 후 사용 가능':ready?'사용 가능':'전투 대기'}`);$(id).setAttribute('aria-disabled',String(!ready));}
+
  const tray=Object.entries(game.skills).filter(([,lv])=>lv>0).map(([id,lv])=>{const s=SKILLS.find(s=>s.id===id);return `<div class="skill-chip" aria-label="${s.name} 레벨 ${lv}">${svg(s.icon)}<small>${lv}</small></div>`;}).join('');if($('skill-tray').innerHTML!==tray)$('skill-tray').innerHTML=tray;
 }
 function resize(){w=window.innerWidth;h=window.innerHeight;dpr=profile.settings.quality==='low'?1:Math.min(window.devicePixelRatio||1,2);$('canvas').width=Math.floor(w*dpr);$('canvas').height=Math.floor(h*dpr);zoom=clamp(w/490,.65,1.25);if(w>h)zoom=clamp(h/560,.6,1);}
