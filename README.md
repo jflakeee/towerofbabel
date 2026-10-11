@@ -57,6 +57,7 @@ PC 조작: WASD 또는 방향키 이동, Space 회피, E 폭발, Esc 일시정�
 | `tests/engine.test.js` | 전투 시뮬레이션과 저장·정산 회귀 검증 |
 | `docs/research.md` | 출처, 영상 챕터 분석, 모바일 구현 대응표 |
 | `docs/verification.md` | 실제 검증 결과와 미검증 범위 |
+| `docs/benchmark-parity-plan.md` | 원작 대응 차이, 필요한 자료, 구현 순서와 완료 조건 |
 
 ## 범위
 
