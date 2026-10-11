@@ -60,3 +60,5 @@ test('five floor bosses have distinct telegraphs, rage patterns and resumable at
   boss.telegraph=.001;boss.targetX=g.player.x+boss.attackRadius+g.player.r-1;boss.targetY=g.player.y;g.player.invulnerable=0;const hp=g.player.hp;g.update(.01);assert.ok(g.player.hp<hp);
  }assert.equal(signatures.size,5);
 });
+
+test('finite but excessive restored movement and collider sizes are rejected before simulation',()=>{const p=defaultProfile(),g=new Game(p,{seed:1});g.spawn('grunt');for(const [target,key,value] of [['player','speed',1e100],['player','r',-1],['enemy','speed',1e100],['enemy','r',1e100]]){const snapshot=g.snapshot();(target==='player'?snapshot.player:snapshot.enemies[0])[key]=value;assert.equal(Game.restore(p,snapshot),null);}const snapshot=g.snapshot();snapshot.enemyShots=[{x:800,y:800,vx:1e100,vy:0,r:5,damage:1,life:1}];assert.equal(Game.restore(p,snapshot),null);});
