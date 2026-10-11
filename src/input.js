@@ -1,9 +1,9 @@
-// One captured finger owns movement until it is released or explicitly reset.
+// The latest touch owns movement; events from an older finger cannot cancel it.
 export class MobileJoystick {
  constructor(){this.reset();}
  reset(){this.pointerId=null;this.x=0;this.y=0;this.dx=0;this.dy=0;}
  begin(id,x,y,rect){
-  if(this.pointerId!==null)return false;
+  if(!Number.isFinite(x)||!Number.isFinite(y))return false;
   this.pointerId=id;this.cx=x;this.cy=y;
   this.radius=Math.max(1,Math.min(rect.width,rect.height)*.3);
   this.move(id,x,y);return true;

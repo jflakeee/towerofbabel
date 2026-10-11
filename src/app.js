@@ -96,12 +96,16 @@ function refreshDirection(){
 function resetInput(){const id=joystick.pointerId;joystick.reset();refreshDirection();if(id!==null&&$('battle').hasPointerCapture?.(id))$('battle').releasePointerCapture(id);}
 function applyControls(){document.documentElement.style.setProperty('--pad-size',`${profile.settings.padSize}px`);document.body.classList.toggle('large-text',profile.settings.textSize==='large');document.querySelector('.controls').style.justifyContent=profile.settings.leftHanded?'flex-end':'flex-start';const abilities=document.querySelector('.auto-abilities');abilities.style.left=profile.settings.leftHanded?'24px':'auto';abilities.style.right=profile.settings.leftHanded?'auto':'24px';}
 $('battle').addEventListener('pointerdown',e=>{
- if(!game||!['playing','choosing'].includes(game.state)||e.button!==0||document.hidden||$('battle').hidden||!$('overlay').hidden)return;
+ if(!game||!['playing','choosing'].includes(game.state)||(e.pointerType==='mouse'&&e.button!==0)||document.hidden||$('battle').hidden||!$('overlay').hidden)return;
+ const previousPointer=joystick.pointerId;
  if(!joystick.begin(e.pointerId,e.clientX,e.clientY,$('joystick').getBoundingClientRect()))return;
  if(paused){paused=false;lastTime=performance.now();$('battle-help').textContent='화면 어디든 드래그해 이동 · 나머지는 자동';}
  $('joystick').style.left=`${e.clientX}px`;$('joystick').style.top=`${e.clientY}px`;
- $('battle').setPointerCapture?.(e.pointerId);refreshDirection();e.preventDefault();
+ if(previousPointer!==null&&previousPointer!==e.pointerId&&$('battle').hasPointerCapture?.(previousPointer))$('battle').releasePointerCapture(previousPointer);
+ try{$('battle').setPointerCapture?.(e.pointerId);}catch{/* Window move/up handlers still release input if capture is unavailable. */}
+ refreshDirection();e.preventDefault();
 });
+$('battle').addEventListener('contextmenu',e=>e.preventDefault());
 window.addEventListener('pointermove',e=>{if(joystick.move(e.pointerId,e.clientX,e.clientY)){refreshDirection();e.preventDefault();}},{passive:false});
 for(const name of ['pointerup','pointercancel','lostpointercapture'])window.addEventListener(name,e=>{if(joystick.end(e.pointerId))refreshDirection();});
 window.addEventListener('keydown',e=>{

@@ -32,3 +32,7 @@
 /* The movement origin follows the first touch anywhere in the battle viewport. */
 .battle .joystick{position:fixed;left:0;top:0;transform:translate(-50%,-50%);visibility:hidden;pointer-events:none;z-index:2}
 .battle .joystick.active{visibility:visible}
+
+/* A single viewport-sized hit area covers both sides, above all combat HUD. */
+.movement-surface{position:absolute;inset:0;z-index:3;touch-action:none;pointer-events:auto;-webkit-touch-callout:none;user-select:none;-webkit-user-select:none}
+.battle .joystick{z-index:4}

@@ -8,11 +8,13 @@ test('joystick has a center deadzone, analog speed and capped diagonal movement'
  j.move(1,1000,-1000);assert.ok(Math.abs(Math.hypot(j.x,j.y)-1)<1e-12);assert.ok(Math.abs(Math.hypot(j.dx,j.dy)-48)<1e-12);assert.ok(j.x>0&&j.y<0);
  j.move(1,80,80);assert.equal(j.x,0);assert.equal(j.y,0);
 });
-test('a second finger cannot steal or cancel movement; release and reset stop immediately',()=>{
- const j=new MobileJoystick();assert.equal(j.begin(0,80,80,rect),true);j.move(0,128,80);
- assert.equal(j.begin(2,32,80,rect),false);assert.equal(j.move(2,32,80),false);assert.equal(j.end(2),false);assert.equal(j.x,1);
- assert.equal(j.end(0),true);assert.equal(j.x,0);assert.equal(j.pointerId,null);
- j.begin(2,80,128,rect);j.reset();assert.equal(j.move(2,0,0),false);assert.equal(j.y,0);assert.equal(j.dy,0);
+test('right-side touch takes over from a held left finger and ignores old release/capture events',()=>{
+ const j=new MobileJoystick();j.begin(1,40,700,rect);j.move(1,88,700);assert.equal(j.x,1);
+ assert.equal(j.begin(2,350,700,rect),true);assert.equal(j.cx,350);assert.equal(j.x,0);
+ j.move(2,302,700);assert.equal(j.x,-1);
+ assert.equal(j.move(1,40,650),false);assert.equal(j.end(1),false);assert.equal(j.x,-1);
+ assert.equal(j.end(2),true);assert.equal(j.x,0);assert.equal(j.pointerId,null);
+ j.begin(3,350,700,rect);j.reset();assert.equal(j.move(3,300,700),false);
 });
 
 test('each fresh touch defines a neutral origin anywhere, including screen edges',()=>{
