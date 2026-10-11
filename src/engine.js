@@ -32,20 +32,27 @@ export const costFor = level => 60 + level * 45;
 export const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 export const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 export function seededRandom(seed=Date.now()) {let s=seed>>>0;return ()=>{s=(Math.imul(1664525,s)+1013904223)>>>0;return s/4294967296;};}
-export function defaultProfile(){return {version:1,gold:0,unlocked:1,selectedHero:'knight',selectedFloor:1,upgrades:{power:0,health:0,fortune:0},inventory:[],equipped:{weapon:null,armor:null,charm:null},settings:{sound:false,quality:'auto',leftHanded:false,shake:true,strategy:'balanced'},best:{kills:0,clears:0},run:null};}
+export function defaultProfile(){return {version:2,gold:0,unlocked:1,selectedHero:'knight',selectedFloor:1,upgrades:{power:0,health:0,fortune:0},inventory:[],overflow:[],transactions:[],previousEquipment:null,lockedSlots:{weapon:false,armor:false,charm:false},equipped:{weapon:null,armor:null,charm:null},settings:{sound:false,quality:'auto',leftHanded:false,shake:true,strategy:'balanced',autoEquip:true},best:{kills:0,clears:0},run:null};}
 export function loadProfile(raw){
- const p=defaultProfile(); if(!raw||raw.version!==1) return p;
+ const p=defaultProfile(); if(!raw||![1,2].includes(raw.version)) return p;
  p.gold=clamp(Number(raw.gold)||0,0,1e8);p.unlocked=clamp(Math.floor(Number(raw.unlocked)||1),1,5);
  p.selectedHero=HEROES[raw.selectedHero]?raw.selectedHero:'knight';p.selectedFloor=clamp(Number(raw.selectedFloor)||1,1,p.unlocked);
  for(const u of UPGRADES)p.upgrades[u.id]=clamp(Math.floor(Number(raw.upgrades?.[u.id])||0),0,u.max);
- p.inventory=Array.isArray(raw.inventory)?raw.inventory.filter(i=>i&&SLOT_NAMES[i.slot]&&Number.isFinite(i.value)&&i.value>=0&&typeof i.name==='string'&&typeof i.id==='string'&&Number.isInteger(i.rarity)&&i.rarity>=0&&i.rarity<5).slice(-100):[];
+ const valid=i=>i&&SLOT_NAMES[i.slot]&&Number.isFinite(i.value)&&i.value>=0&&typeof i.name==='string'&&typeof i.id==='string'&&Number.isInteger(i.rarity)&&i.rarity>=0&&i.rarity<5;
+ p.inventory=[...(Array.isArray(raw.inventory)?raw.inventory:[]),...(Array.isArray(raw.overflow)?raw.overflow:[])].filter(valid);
+ p.transactions=Array.isArray(raw.transactions)?raw.transactions.filter(t=>t&&typeof t.id==='string'&&['sell','undo-sale','reset','upgrade'].includes(t.type)&&(t.type!=='sell'||(valid(t.item)&&Number.isFinite(t.payout)&&t.payout>=0))).slice(-20):[];
+ p.previousEquipment=raw.previousEquipment&&typeof raw.previousEquipment==='object'?raw.previousEquipment:null;
+ for(const slot of Object.keys(SLOT_NAMES))p.lockedSlots[slot]=raw.lockedSlots?.[slot]===true;
  for(const slot of Object.keys(SLOT_NAMES))p.equipped[slot]=p.inventory.find(i=>i.id===raw.equipped?.[slot]&&i.slot===slot)?.id||null;
- p.settings={...p.settings,...raw.settings};if(!['auto','low','high'].includes(p.settings.quality))p.settings.quality='auto';
+ organizeInventory(p);p.settings={...p.settings,...raw.settings};if(!['auto','low','high'].includes(p.settings.quality))p.settings.quality='auto';
+ p.settings.autoEquip=p.settings.autoEquip!==false;
  if(!['balanced','survival','attack','farming'].includes(p.settings.strategy))p.settings.strategy='balanced';
  p.best={kills:Math.max(0,Number(raw.best?.kills)||0),clears:Math.max(0,Number(raw.best?.clears)||0)};
  p.run=raw.run&&raw.run.version===1?raw.run:null;return p;
 }
-export function equippedStats(profile){const stats={damage:0,hp:0,crit:0};for(const slot of Object.keys(SLOT_NAMES)){const i=profile.inventory.find(i=>i.id===profile.equipped[slot]);if(i){if(slot==='weapon')stats.damage+=i.value;if(slot==='armor')stats.hp+=i.value;if(slot==='charm')stats.crit+=i.value/100;}}return stats;}
+export function allItems(profile){return [...profile.inventory,...(profile.overflow||[])];}
+export function organizeInventory(profile){const unique=[...new Map(allItems(profile).map(i=>[i.id,i])).values()],worn=new Set(Object.values(profile.equipped));const protectedItems=unique.filter(i=>worn.has(i.id)),rest=unique.filter(i=>!worn.has(i.id));const room=Math.max(0,100-protectedItems.length);profile.inventory=[...protectedItems,...rest.slice(-room)];profile.overflow=rest.slice(0,Math.max(0,rest.length-room));}
+export function equippedStats(profile){const stats={damage:0,hp:0,crit:0};for(const slot of Object.keys(SLOT_NAMES)){const i=allItems(profile).find(i=>i.id===profile.equipped[slot]);if(i){if(slot==='weapon')stats.damage+=i.value;if(slot==='armor')stats.hp+=i.value;if(slot==='charm')stats.crit+=i.value/100;}}return stats;}
 export function makeLoot(floor,rng=Math.random,forceRare=false){
  const roll=rng(),rarity=forceRare?Math.min(4,2+Math.floor(rng()*3)):roll>.98?4:roll>.9?3:roll>.68?2:roll>.35?1:0;
  const slot=['weapon','armor','charm'][Math.floor(rng()*3)],prefix=['낡은','깨어난','서리빛','심연의','여명의'][rarity];
@@ -56,7 +63,7 @@ export function grantRewards(profile,run){
  if(run.state!=='won'&&run.state!=='lost')return false;
  if(run.rewarded)return false;run.rewarded=true;
  profile.gold+=run.gold+ (run.state==='won'?60*run.floor:15);
- profile.inventory.push(...run.loot);const worn=new Set(Object.values(profile.equipped));const protectedItems=profile.inventory.filter(i=>worn.has(i.id));profile.inventory=[...protectedItems,...profile.inventory.filter(i=>!worn.has(i.id)).slice(-(100-protectedItems.length))];
+ profile.inventory.push(...run.loot);organizeInventory(profile);
  if(run.state==='won'){profile.unlocked=Math.max(profile.unlocked,Math.min(5,run.floor+1));profile.best.clears++;}
  profile.best.kills=Math.max(profile.best.kills,run.kills);profile.run=null;return true;
 }
