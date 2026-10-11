@@ -1,0 +1,8 @@
+export function readStored(storage,key){const parse=value=>{try{const p=JSON.parse(value);return p&&[1,2].includes(p.version)&&Array.isArray(p.inventory)&&Number.isFinite(p.gold)?p:null;}catch{return null;}};const primary=parse(storage.getItem(key));return {profile:primary||parse(storage.getItem(key+'-backup')),recovered:!primary&&!!parse(storage.getItem(key+'-backup'))};}
+export class ProfileStore{
+ constructor(storage,locks,key='babel-mobile-v1'){this.storage=storage;this.locks=locks;this.key=key;this.writable=false;this.revision=0;this.release=null;this.reason='다른 탭에서 게임을 사용 중입니다.';}
+ async open(){if(!this.locks){this.reason='이 브라우저에서는 안전한 저장 잠금을 사용할 수 없습니다. 최신 모바일 브라우저로 열어 주세요.';return false;}return new Promise(resolve=>{this.locks.request(this.key+'-writer',{ifAvailable:true},async lock=>{if(!lock){resolve(false);return;}this.writable=true;try{this.revision=readStored(this.storage,this.key).profile?.revision||0;}catch{}resolve(true);await new Promise(done=>{this.release=done;});this.writable=false;}).catch(()=>resolve(false));});}
+ read(){return readStored(this.storage,this.key);}
+ write(profile){if(!this.writable)throw Error('다른 탭이 저장을 관리하고 있습니다.');const current=readStored(this.storage,this.key).profile;const revision=current?.revision||0;if(revision!==this.revision){this.writable=false;this.reason='저장 버전이 달라졌습니다. 새로고침해 최신 저장을 불러오세요.';throw Error('저장 버전이 달라져 쓰기를 중지했습니다.');}const draft={...profile,revision:revision+1};const old=this.storage.getItem(this.key);if(old&&current)this.storage.setItem(this.key+'-backup',JSON.stringify(current));this.storage.setItem(this.key,JSON.stringify(draft));this.revision=draft.revision;profile.revision=draft.revision;}
+ close(){this.release?.();this.writable=false;}
+}
