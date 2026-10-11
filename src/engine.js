@@ -32,7 +32,7 @@ export const costFor = level => 60 + level * 45;
 export const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 export const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 export function seededRandom(seed=Date.now()) {let s=seed>>>0;return ()=>{s=(Math.imul(1664525,s)+1013904223)>>>0;return s/4294967296;};}
-export function defaultProfile(){return {version:1,gold:0,unlocked:1,selectedHero:'knight',selectedFloor:1,upgrades:{power:0,health:0,fortune:0},inventory:[],equipped:{weapon:null,armor:null,charm:null},settings:{sound:false,quality:'auto',leftHanded:false,shake:true},best:{kills:0,clears:0},run:null};}
+export function defaultProfile(){return {version:1,gold:0,unlocked:1,selectedHero:'knight',selectedFloor:1,upgrades:{power:0,health:0,fortune:0},inventory:[],equipped:{weapon:null,armor:null,charm:null},settings:{sound:false,quality:'auto',leftHanded:false,shake:true,strategy:'balanced'},best:{kills:0,clears:0},run:null};}
 export function loadProfile(raw){
  const p=defaultProfile(); if(!raw||raw.version!==1) return p;
  p.gold=clamp(Number(raw.gold)||0,0,1e8);p.unlocked=clamp(Math.floor(Number(raw.unlocked)||1),1,5);
@@ -41,6 +41,7 @@ export function loadProfile(raw){
  p.inventory=Array.isArray(raw.inventory)?raw.inventory.filter(i=>i&&SLOT_NAMES[i.slot]&&Number.isFinite(i.value)&&i.value>=0&&typeof i.name==='string'&&typeof i.id==='string'&&Number.isInteger(i.rarity)&&i.rarity>=0&&i.rarity<5).slice(-100):[];
  for(const slot of Object.keys(SLOT_NAMES))p.equipped[slot]=p.inventory.find(i=>i.id===raw.equipped?.[slot]&&i.slot===slot)?.id||null;
  p.settings={...p.settings,...raw.settings};if(!['auto','low','high'].includes(p.settings.quality))p.settings.quality='auto';
+ if(!['balanced','survival','attack','farming'].includes(p.settings.strategy))p.settings.strategy='balanced';
  p.best={kills:Math.max(0,Number(raw.best?.kills)||0),clears:Math.max(0,Number(raw.best?.clears)||0)};
  p.run=raw.run&&raw.run.version===1?raw.run:null;return p;
 }
@@ -64,6 +65,7 @@ export class Game {
   this.rng=options.rng||Math.random;this.floor=options.floor||profile.selectedFloor;this.hero=options.hero||profile.selectedHero;
   const h=HEROES[this.hero],gear=equippedStats(profile);
   this.player={x:800,y:800,r:15,hp:h.hp+profile.upgrades.health*12+gear.hp,maxHp:h.hp+profile.upgrades.health*12+gear.hp,damage:h.damage*(1+profile.upgrades.power*.08)+gear.damage,speed:h.speed,crit:.05+gear.crit,face:0,invulnerable:0};
+  this.autoStrategy=profile.settings.strategy||'balanced';this.decisionLog=[];
   this.fortune=1+profile.upgrades.fortune*.1;this.state='playing';this.time=0;this.duration=90;this.kills=0;this.gold=0;this.level=1;this.xp=0;this.nextXp=8;
   this.skills={};this.enemies=[];this.projectiles=[];this.enemyShots=[];this.gems=[];this.effects=[];this.texts=[];this.loot=[];this.choices=[];
   this.spawnClock=0;this.attackClock=.2;this.skillClocks={fire:1,ice:2,lightning:1,orbit:.4};this.dashCd=0;this.novaCd=0;this.dashTime=0;this.dashDir={x:1,y:0};this.pendingLevels=0;this.rerolls=1;this.bossSpawned=false;this.bossId=null;this.id=0;this.rewarded=false;this.event=null;this.damageFlash=0;
@@ -75,7 +77,7 @@ export class Game {
   if(!snapshot.skills||SKILLS.some(s=>snapshot.skills[s.id]!==undefined&&(!Number.isInteger(snapshot.skills[s.id])||snapshot.skills[s.id]<0||snapshot.skills[s.id]>s.max)))return null;
   if(snapshot.state==='choosing'&&(!snapshot.choices.length||snapshot.choices.some(id=>!SKILLS.some(s=>s.id===id))))return null;
   if(['enemies','projectiles','enemyShots','gems'].some(k=>snapshot[k].some(o=>!o||!Number.isFinite(o.x)||!Number.isFinite(o.y))))return null;
-  const game=new Game(profile);for(const key of Object.keys(game)){if(key!=='rng'&&snapshot[key]!==undefined)game[key]=snapshot[key];}game.event=null;game.effects=[];game.texts=[];return game;
+  const game=new Game(profile);for(const key of Object.keys(game)){if(key!=='rng'&&snapshot[key]!==undefined)game[key]=snapshot[key];}if(!['balanced','survival','attack','farming'].includes(game.autoStrategy))game.autoStrategy='balanced';game.decisionLog=Array.isArray(game.decisionLog)?game.decisionLog.filter(d=>d&&typeof d.id==='string'&&typeof d.reason==='string').slice(-200):[];game.event=null;game.effects=[];game.texts=[];return game;
  }
  snapshot(){const o={version:1};for(const k of Object.keys(this))if(k!=='rng'&&k!=='event')o[k]=this[k];return JSON.parse(JSON.stringify(o));}
  spawn(kind){
