@@ -1,0 +1,6 @@
+{
+  "name": "babel-mobile", "version": "0.1.0", "private": true, "type": "module",
+  "description": "Mobile-first survivor action RPG benchmark prototype",
+  "scripts": {"test": "node --test tests/*.test.js", "check": "node --check src/engine.js && node --check src/app.js && node --check sw.js", "start": "python3 -m http.server 8080", "build": "node scripts/build.mjs"},
+  "engines": {"node": ">=20"}
+}

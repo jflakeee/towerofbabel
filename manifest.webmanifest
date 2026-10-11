@@ -1,0 +1,6 @@
+{
+ "name":"BABEL · 잿빛 탑", "short_name":"BABEL", "lang":"ko", "start_url":"./", "scope":"./",
+ "display":"standalone", "orientation":"any", "background_color":"#0b1012", "theme_color":"#0b1012",
+ "description":"한 손으로 도전하는 다크 판타지 서바이버 RPG",
+ "icons":[{"src":"assets/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
