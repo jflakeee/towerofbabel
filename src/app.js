@@ -54,12 +54,12 @@ function resetInput(){input.x=0;input.y=0;keys.clear();pointerId=null;pointerOri
 function applyControls(){document.querySelector('.controls').style.flexDirection=profile.settings.leftHanded?'row-reverse':'row';}
 function pointerStart(e){
  if(!game||paused||game.state!=='playing'||pointerId!==null)return;
- if(e.target.closest('button'))return;const isJoy=e.target.closest('#joystick');if(!isJoy&&(profile.settings.leftHanded?e.clientX<w*.35:e.clientX>w*.65))return;
+ if(e.button!==0||e.target.closest('button')||e.target.closest('.battle-hud'))return;const isJoy=e.target.closest('#joystick');if(!isJoy&&(profile.settings.leftHanded?e.clientX<w*.35:e.clientX>w*.65))return;
  pointerId=e.pointerId;pointerOrigin={x:e.clientX,y:e.clientY};e.target.setPointerCapture?.(e.pointerId);$('joystick').style.position='fixed';$('joystick').style.left=`${e.clientX-56}px`;$('joystick').style.top=`${e.clientY-56}px`;e.preventDefault();
 }
 $('battle').addEventListener('pointerdown',pointerStart);
 window.addEventListener('pointermove',e=>{if(e.pointerId!==pointerId||!pointerOrigin)return;const dx=e.clientX-pointerOrigin.x,dy=e.clientY-pointerOrigin.y,mag=Math.hypot(dx,dy),n=Math.min(mag,40)/(mag||1);input.x=dx*n/40;input.y=dy*n/40;$('stick').style.transform=`translate(${dx*n}px,${dy*n}px)`;e.preventDefault();},{passive:false});
-for(const name of ['pointerup','pointercancel'])window.addEventListener(name,e=>{if(e.pointerId===pointerId)resetInput();});
+for(const name of ['pointerup','pointercancel','lostpointercapture'])window.addEventListener(name,e=>{if(e.pointerId===pointerId)resetInput();});
 $('dash').addEventListener('pointerdown',e=>{e.preventDefault();if(!paused&&game?.dash(input))sound('dash');});$('nova').addEventListener('pointerdown',e=>{e.preventDefault();if(!paused&&game?.nova())sound('attack');});
 // Keyboard activation remains available for the visible action buttons.
 $('dash').onclick=e=>{if(e.detail===0&&!paused&&game?.dash(input))sound('dash');};$('nova').onclick=e=>{if(e.detail===0&&!paused&&game?.nova())sound('attack');};
@@ -71,7 +71,7 @@ window.addEventListener('keydown',e=>{
  if(key===' '&&!e.repeat)game.dash(input);if(key==='e'&&!e.repeat)game.nova();
 });
 window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
-function pauseGame(){if(!game||game.state!=='playing'||paused)return;paused=true;save();openModal('pause',`${header('TAKE A BREATH','잠시, 숨을 고르세요')}<p>전투를 저장했습니다. 준비되면 도전을 계속하세요.</p><button id="unpause" class="primary">계속하기</button><button id="exit-battle" class="secondary">저장 후 로비로</button>`);$('unpause').onclick=()=>{closeModal();paused=false;lastTime=performance.now();};$('exit-battle').onclick=goHome;}
+function pauseGame(){if(!game||game.state!=='playing'||paused)return;paused=true;save();openModal('pause',`${header('TAKE A BREATH','잠시, 숨을 고르세요')}<p>전투를 저장했습니다. 준비되면 도전을 계속하세요.</p><div class="build-list">${SKILLS.filter(s=>game.skills[s.id]).map(s=>`<div><strong>${esc(s.name)} · LV.${game.skills[s.id]}</strong><p>${s.description}</p></div>`).join('')||'<p>레벨을 올려 첫 축복을 선택하세요.</p>'}</div><button id="unpause" class="primary">계속하기</button><button id="exit-battle" class="secondary">저장 후 로비로</button>`);$('unpause').onclick=()=>{closeModal();paused=false;lastTime=performance.now();};$('exit-battle').onclick=goHome;}
 $('pause').onclick=pauseGame;
 function goHome(){save();closeModal();cancelAnimationFrame(raf);game=null;paused=false;resetInput();$('battle').hidden=true;document.body.style.overflow='';renderHome();}
 function showChoices(){
@@ -90,8 +90,9 @@ function updateHud(){
  if(!game)return;const p=game.player;$('hp-fill').style.width=`${p.hp/p.maxHp*100}%`;$('hp-text').textContent=`${Math.ceil(p.hp)} / ${p.maxHp}`;$('xp-fill').style.width=`${game.xp/game.nextXp*100}%`;$('level').textContent=`LV.${game.level}`;$('b-floor').textContent=`${String(game.floor).padStart(2,'0')}F`;$('b-name').textContent=FLOORS[game.floor-1].name;$('kills').textContent=game.kills;$('run-gold').textContent=game.gold;
  $('timer').textContent=game.bossSpawned?`보스 제한 ${formatTime(Math.max(0,150-game.time))}`:`${formatTime(game.time)} / 01:30`;
  const boss=game.enemies.find(e=>e.id===game.bossId);$('boss-hud').hidden=!boss;if(boss)$('boss-fill').style.width=`${Math.max(0,boss.hp/boss.maxHp*100)}%`;
+ const marker=$('boss-direction');marker.hidden=true;if(boss&&boss.hp>0){const dx=(boss.x-p.x)*zoom,dy=(boss.y-p.y)*zoom;const rx=Math.max(30,w/2-45),ry=Math.max(30,h/2-70);if(Math.abs(dx)>rx||Math.abs(dy)>ry){const scale=Math.min(rx/(Math.abs(dx)||1),ry/(Math.abs(dy)||1));marker.hidden=false;marker.style.left=`${w/2+dx*scale}px`;marker.style.top=`${h/2+dy*scale}px`;marker.querySelector('b').style.transform=`rotate(${Math.atan2(dy,dx)}rad)`;}}
  $('dash-cd').textContent=game.dashCd>0?Math.ceil(game.dashCd):'';$('nova-cd').textContent=game.novaCd>0?Math.ceil(game.novaCd):'';
- const tray=Object.entries(game.skills).filter(([id])=>['fire','ice','lightning','orbit'].includes(id)).map(([id,lv])=>{const s=SKILLS.find(s=>s.id===id);return `<div class="skill-chip" aria-label="${s.name} 레벨 ${lv}">${svg(s.icon)}<small>${lv}</small></div>`;}).join('');if($('skill-tray').innerHTML!==tray)$('skill-tray').innerHTML=tray;
+ const tray=Object.entries(game.skills).filter(([,lv])=>lv>0).map(([id,lv])=>{const s=SKILLS.find(s=>s.id===id);return `<div class="skill-chip" aria-label="${s.name} 레벨 ${lv}">${svg(s.icon)}<small>${lv}</small></div>`;}).join('');if($('skill-tray').innerHTML!==tray)$('skill-tray').innerHTML=tray;
 }
 function resize(){w=window.innerWidth;h=window.innerHeight;dpr=profile.settings.quality==='low'?1:Math.min(window.devicePixelRatio||1,2);$('canvas').width=Math.floor(w*dpr);$('canvas').height=Math.floor(h*dpr);zoom=clamp(w/490,.65,1.25);if(w>h)zoom=clamp(h/560,.6,1);}
 window.addEventListener('resize',()=>{resetInput();resize();if(game)draw();});

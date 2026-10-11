@@ -55,7 +55,7 @@ export function grantRewards(profile,run){
  if(run.state!=='won'&&run.state!=='lost')return false;
  if(run.rewarded)return false;run.rewarded=true;
  profile.gold+=run.gold+ (run.state==='won'?60*run.floor:15);
- profile.inventory.push(...run.loot);profile.inventory=profile.inventory.slice(-100);
+ profile.inventory.push(...run.loot);const worn=new Set(Object.values(profile.equipped));const protectedItems=profile.inventory.filter(i=>worn.has(i.id));profile.inventory=[...protectedItems,...profile.inventory.filter(i=>!worn.has(i.id)).slice(-(100-protectedItems.length))];
  if(run.state==='won'){profile.unlocked=Math.max(profile.unlocked,Math.min(5,run.floor+1));profile.best.clears++;}
  profile.best.kills=Math.max(profile.best.kills,run.kills);profile.run=null;return true;
 }
@@ -70,6 +70,11 @@ export class Game {
  }
  static restore(profile,snapshot){
   if(!snapshot||snapshot.version!==1||!HEROES[snapshot.hero]||!['playing','choosing'].includes(snapshot.state)||!snapshot.player||!Number.isFinite(snapshot.player.hp)||snapshot.player.hp<=0||!Number.isFinite(snapshot.time)||snapshot.time<0||snapshot.floor<1||snapshot.floor>5||!Array.isArray(snapshot.enemies))return null;
+  const arrays=['projectiles','enemyShots','gems','loot','choices'];if(arrays.some(k=>!Array.isArray(snapshot[k])))return null;
+  if(!Number.isInteger(snapshot.floor)||!Number.isFinite(snapshot.player.maxHp)||snapshot.player.maxHp<=0||['x','y','damage','speed','crit','face','invulnerable'].some(k=>!Number.isFinite(snapshot.player[k])))return null;
+  if(!snapshot.skills||SKILLS.some(s=>snapshot.skills[s.id]!==undefined&&(!Number.isInteger(snapshot.skills[s.id])||snapshot.skills[s.id]<0||snapshot.skills[s.id]>s.max)))return null;
+  if(snapshot.state==='choosing'&&(!snapshot.choices.length||snapshot.choices.some(id=>!SKILLS.some(s=>s.id===id))))return null;
+  if(['enemies','projectiles','enemyShots','gems'].some(k=>snapshot[k].some(o=>!o||!Number.isFinite(o.x)||!Number.isFinite(o.y))))return null;
   const game=new Game(profile);for(const key of Object.keys(game)){if(key!=='rng'&&snapshot[key]!==undefined)game[key]=snapshot[key];}game.event=null;game.effects=[];game.texts=[];return game;
  }
  snapshot(){const o={version:1};for(const k of Object.keys(this))if(k!=='rng'&&k!=='event')o[k]=this[k];return JSON.parse(JSON.stringify(o));}

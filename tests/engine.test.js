@@ -43,3 +43,9 @@ test('first floor is beatable by each unupgraded hero with movement and active s
   g.update(.05,{x,y});if(g.novaCd===0)g.nova();
  }assert.equal(g.state,'won',`${hero} should have a viable first-floor path`);}
 });
+test('full inventory keeps equipped gear and newest rewards',()=>{
+ const p=defaultProfile();p.inventory=Array.from({length:100},(_,i)=>({id:`item-${i}`,slot:'weapon',value:1}));p.equipped.weapon='item-0';const g=makeGame();g.state='won';g.loot=[{id:'new',slot:'armor',value:10}];grantRewards(p,g);assert.equal(p.inventory.length,100);assert.ok(p.inventory.some(i=>i.id==='item-0'));assert.ok(p.inventory.some(i=>i.id==='new'));assert.ok(!p.inventory.some(i=>i.id==='item-1'));
+});
+test('corrupt combat snapshots fail safely instead of resuming invalid state',()=>{
+ const p=defaultProfile(),valid=makeGame().snapshot();for(const mutate of [s=>s.player.x=null,s=>s.player.maxHp=0,s=>s.floor=1.5,s=>s.enemyShots=null,s=>s.skills={power:999},s=>{s.state='choosing';s.choices=['unknown'];},s=>s.enemies=[{x:null,y:1}]]){const snapshot=structuredClone(valid);mutate(snapshot);assert.equal(Game.restore(p,snapshot),null);}assert.ok(Game.restore(p,valid));
+});

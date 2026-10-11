@@ -1,4 +1,4 @@
-const CACHE='babel-mobile-v1';
+const CACHE='babel-mobile-v2';
 const FILES=['./','./index.html','./styles.css','./src/app.js','./src/engine.js','./manifest.webmanifest','./assets/icon.svg'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(FILES))));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('babel-mobile-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
