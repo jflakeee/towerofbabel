@@ -29,3 +29,21 @@ test('tied choices use user priority before stable content ID',()=>{
  const rank=rankChoices(g);assert.equal(rank[0].score,rank[1].score);assert.equal(rank[0].id,'power');
  g.choices.reverse();assert.equal(rankChoices(g)[0].id,'power');
 });
+
+
+test('automatic dodge ignores shots that expire before reaching the player',()=>{
+ for(const life of [.05,1]){
+  const g=make();g.worldVersion=0;g.novaCd=5;
+  g.enemyShots=[{x:700,y:800,vx:400,vy:0,r:5,damage:10,life}];
+  automateAbilities(g,{x:0,y:1});assert.equal(g.dashCd,life===1?3:0);
+ }
+});
+test('automatic dodge respects the first wall impact and detects stationary overlapping shots',()=>{
+ for(const worldVersion of [0,1]){
+  const g=make();g.worldVersion=worldVersion;g.player.x=550;g.player.y=470;g.novaCd=5;
+  g.enemyShots=[{x:430,y:470,vx:500,vy:0,r:5,damage:10,life:1}];
+  automateAbilities(g,{x:0,y:1});assert.equal(g.dashCd,worldVersion===1?0:3);
+ }
+ const g=make();g.novaCd=5;g.enemyShots=[{x:800,y:800,vx:0,vy:0,r:5,damage:10,life:1}];
+ automateAbilities(g,{x:1,y:0});assert.equal(g.dashCd,3);
+});

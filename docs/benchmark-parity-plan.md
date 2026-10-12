@@ -1,6 +1,6 @@
 # 벤치마크 동일성 구현 검토 및 실행 계획
 
-> 최신 수용 현황: [2026-10-12 구현 대응표](implementation-status.md). 아래의 과거 테스트 개수·D-pad·수동 입력 설명은 당시 기록입니다. 현재 자동 검사는 105개입니다.
+> 최신 수용 현황: [2026-10-12 구현 대응표](implementation-status.md). 아래의 과거 테스트 개수·D-pad·수동 입력 설명은 당시 기록입니다. 현재 자동 검사는 107개입니다.
 
 작성: 2026-10-11 KST
 대상: Tower of Babel: Survivors of Chaos / jflakeee/towerofbabel

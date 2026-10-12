@@ -1,6 +1,6 @@
 import {normalizeAutomation} from './content.js';
-import {SKILLS,clamp,availableSkills} from './engine.js';
-import {isWalkable,clearLine} from './world.js';
+import {SKILLS,availableSkills} from './engine.js';
+import {isWalkable,clearLine,segmentCircleTime,firstWallTime} from './world.js';
 export const STRATEGIES={balanced:'균형',survival:'생존',attack:'공격',farming:'파밍',custom:'직접 편집'};
 export function rankChoices(game){
  const base={power:6,haste:5,fire:9,ice:5,lightning:9,orbit:7,magnet:4,vitality:3,crit:4,guardian:8,cleave:8,focus:8,meteor:10,barrage:9,pierce:8};
@@ -29,7 +29,7 @@ function danger(game,x,y){
  let score=0;for(const e of game.enemies){if(e.hp<=0)continue;const d=Math.hypot(x-e.x,y-e.y);score+=Math.max(0,e.r+game.player.r+30-d);
   if(e.telegraph>0&&e.telegraph<.4&&Math.hypot(x-e.targetX,y-e.targetY)<(e.attackRadius||95)+game.player.r)score+=180;
  }
- for(const b of game.enemyShots){if(b.life<=0)continue;const speed=b.vx*b.vx+b.vy*b.vy;if(!speed)continue;const t=clamp(((x-b.x)*b.vx+(y-b.y)*b.vy)/speed,0,.3);if(Math.hypot(x-b.x-b.vx*t,y-b.y-b.vy*t)<b.r+game.player.r+8)score+=50;}
+ for(const b of game.enemyShots){if(b.life<=0)continue;const horizon=Math.min(.3,b.life),end={x:b.x+b.vx*horizon,y:b.y+b.vy*horizon},hit=segmentCircleTime(b,end,{x,y},b.r+game.player.r+8);if(hit<=1&&hit<firstWallTime(game,b,end,b.r))score+=50;}
  return score;
 }
 export function automateAbilities(game,input){
