@@ -1,5 +1,5 @@
 import {normalizeItem,rollOption,itemStats,defaultAutomation,normalizeAutomation,normalizeMaterials,GEM_DEFS,gemKey,ITEM_BASES,ITEM_PREFIXES} from './content.js';
-import {DIFFICULTIES,defaultJourney,normalizeJourney,gameObstacles,moveEntity,clearLine,safeSpawn,pursue} from './world.js';
+import {DIFFICULTIES,defaultJourney,normalizeJourney,gameObstacles,moveEntity,clearLine,firstWallTime,segmentCircleTime,safeSpawn,pursue} from './world.js';
 export const FLOORS = [
  {name:'망각의 문',subtitle:'잊힌 자들이 깨어나는 곳',color:'#638477'},
  {name:'균열의 회랑',subtitle:'돌 틈에서 번지는 혼돈',color:'#678592'},
@@ -137,7 +137,7 @@ export class Game {
  combatTarget(range){const candidates=this.enemies.filter(e=>e.hp>0&&distance(e,this.player)<range&&clearLine(this,this.player,e));const score=e=>distance(e,this.player)-(e.telegraph>0?60:0)-(e.type==='caster'?30:0);candidates.sort((a,b)=>score(a)-score(b)||a.id-b.id);const best=candidates[0],current=candidates.find(e=>e.id===this.targetId);const target=current&&best&&score(current)<=score(best)+25?current:best;this.targetId=target?.id||null;return target||null;}
  addEffect(type,x,y,r,color,life=.4,angle=0){this.effects.push({type,x,y,r,color,life,maxLife:life,angle});}
  damageEnemy(e,amount,critAllowed=true){
-  if(e.hp<=0)return;const crit=critAllowed&&this.rng()<this.player.crit+(this.skills.crit||0)*.1;
+  if(e.hp<=0||['won','lost'].includes(this.state))return;const crit=critAllowed&&this.rng()<this.player.crit+(this.skills.crit||0)*.1;
   const dmg=amount*(1+(this.skills.power||0)*.2)*(crit?2:1);e.hp-=dmg;e.hit=.1;
   if(this.texts.length<35)this.texts.push({x:e.x,y:e.y-18,text:String(Math.round(dmg)),color:crit?'#e8c67d':'#c8d4c7',life:.6,maxLife:.6});
   if(e.hp<=0){this.kills++;if(this.kills%15===0&&this.player.hp>0){this.player.hp=Math.min(this.player.maxHp,this.player.hp+12);this.addEffect('ring',this.player.x,this.player.y,40,'#86b9aa',.4);}this.gold+=Math.round((e.type==='boss'?25:e.type==='elite'?10:1)*this.fortune*DIFFICULTIES[this.difficulty].reward*(this.mode==='chaos'?1+this.depth*.05:1));this.gems.push({x:e.x,y:e.y,value:e.type==='elite'?6:1});
@@ -158,7 +158,7 @@ export class Game {
  }
  gainXp(value){this.xp+=value*(1+(this.skills.magnet||0)*.15);while(this.xp>=this.nextXp){this.xp-=this.nextXp;this.level++;this.nextXp=Math.round(this.nextXp*1.18+3);this.pendingLevels++;}if(this.pendingLevels&&this.state==='playing')this.offerChoices();}
  offerChoices(){const pool=availableSkills(this).filter(s=>(this.skills[s.id]||0)<s.max);if(!pool.length){this.pendingLevels=0;this.state='playing';this.choices=[];this.player.hp=Math.min(this.player.maxHp,this.player.hp+25);return;}for(let i=pool.length-1;i>0;i--){const j=Math.floor(this.rng()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}this.choices=pool.slice(0,3).map(s=>s.id);this.state='choosing';this.event='level';}
- choose(id){if(this.state!=='choosing'||!this.choices.includes(id))return false;this.skills[id]=(this.skills[id]||0)+1;if(id==='vitality'){this.player.maxHp+=25;this.player.hp=Math.min(this.player.maxHp,this.player.hp+35);}this.pendingLevels=Math.max(0,this.pendingLevels-1);this.state='playing';this.choices=[];if(this.pendingLevels)this.offerChoices();return true;}
+ choose(id){if(this.state!=='choosing'||!this.choices.includes(id)||!availableSkills(this).some(s=>s.id===id&&(this.skills[id]||0)<s.max))return false;this.skills[id]=(this.skills[id]||0)+1;if(id==='vitality'){this.player.maxHp+=25;this.player.hp=Math.min(this.player.maxHp,this.player.hp+35);}this.pendingLevels=Math.max(0,this.pendingLevels-1);this.state='playing';this.choices=[];if(this.pendingLevels)this.offerChoices();return true;}
  reroll(){if(this.state!=='choosing'||!this.rerolls)return false;this.rerolls--;this.offerChoices();return true;}
  dash(input={x:0,y:0}){if(this.state!=='playing'||this.dashCd>0)return false;let {x,y}=input;const mag=Math.hypot(x,y);if(mag){x/=mag;y/=mag;}else{x=Math.cos(this.player.face);y=Math.sin(this.player.face);}this.dashDir={x,y};this.dashTime=.18;this.dashCd=3;this.player.invulnerable=.4;this.addEffect('ring',this.player.x,this.player.y,45,'#ced8b8',.3);return true;}
  nova(){if(this.state!=='playing'||this.novaCd>0)return false;this.novaCd=12*(1-(this.gearStats.novaHaste||0)*.2);this.player.invulnerable=.4;this.addEffect('ring',this.player.x,this.player.y,240,'#d5ae71',.7);for(const e of this.enemies)if(distance(e,this.player)<240&&clearLine(this,this.player,e)){this.damageEnemy(e,100+this.level*7);const a=Math.atan2(e.y-this.player.y,e.x-this.player.x);moveEntity(this,e,Math.cos(a)*55,Math.sin(a)*55);}return true;}
@@ -183,9 +183,30 @@ export class Game {
    }if(distance(e,p)<e.r+p.r)this.hitPlayer(e.damage);
   }
   if(this.state==='lost')return;
-  for(const bullet of this.projectiles){const before={x:bullet.x,y:bullet.y};bullet.x+=bullet.vx*dt;bullet.y+=bullet.vy*dt;bullet.life-=dt;if(!clearLine(this,before,bullet,bullet.r)){bullet.life=0;continue;}bullet.hitIds||=[];for(const e of this.enemies)if(e.hp>0&&!bullet.hitIds.includes(e.id)&&distance(e,bullet)<e.r+bullet.r){if(bullet.aoe){this.addEffect('ring',bullet.x,bullet.y,bullet.aoe,bullet.color,.25);for(const target of this.enemies)if(distance(target,bullet)<bullet.aoe&&clearLine(this,bullet,target))this.damageEnemy(target,bullet.damage);}else this.damageEnemy(e,bullet.damage);bullet.hitIds.push(e.id);if((bullet.pierce||0)>0)bullet.pierce--;else bullet.life=0;break;}}
-  for(const b of this.enemyShots){const before={x:b.x,y:b.y};b.x+=b.vx*dt;b.y+=b.vy*dt;b.life-=dt;if(!clearLine(this,before,b,b.r)){b.life=0;continue;}if(distance(b,p)<b.r+p.r){this.hitPlayer(b.damage);b.life=0;}}
-  if(this.state==='lost')return;
+  for(const bullet of this.projectiles){
+   if(bullet.life<=0)continue;
+   const before={x:bullet.x,y:bullet.y},step=Math.min(dt,bullet.life),end={x:bullet.x+bullet.vx*step,y:bullet.y+bullet.vy*step},wall=firstWallTime(this,before,end,bullet.r);
+   bullet.life-=dt;bullet.hitIds||=[];
+   const hits=this.enemies.filter(e=>e.hp>0&&!bullet.hitIds.includes(e.id)).map(e=>({enemy:e,t:segmentCircleTime(before,end,e,e.r+bullet.r)})).filter(hit=>hit.t<wall&&hit.t<=1).sort((a,b)=>a.t-b.t||a.enemy.id-b.enemy.id);
+   let stop=wall;
+   for(const hit of hits){
+    const e=hit.enemy;if(e.hp<=0)continue;const impact={x:before.x+(end.x-before.x)*hit.t,y:before.y+(end.y-before.y)*hit.t};
+    if(bullet.aoe){this.addEffect('ring',impact.x,impact.y,bullet.aoe,bullet.color,.25);for(const target of this.enemies)if((target===e||distance(target,impact)<bullet.aoe)&&clearLine(this,impact,target))this.damageEnemy(target,bullet.damage);}
+    else this.damageEnemy(e,bullet.damage);
+    bullet.hitIds.push(e.id);if((bullet.pierce||0)>0)bullet.pierce--;else{bullet.life=0;stop=hit.t;}
+    if(this.state!=='playing')return;
+    if(stop===hit.t)break;
+   }
+   if(wall!==Infinity)bullet.life=0;
+   const t=Math.min(1,stop);bullet.x=before.x+(end.x-before.x)*t;bullet.y=before.y+(end.y-before.y)*t;
+  }
+  for(const b of this.enemyShots){
+   if(b.life<=0)continue;
+   const before={x:b.x,y:b.y},step=Math.min(dt,b.life),end={x:b.x+b.vx*step,y:b.y+b.vy*step},wall=firstWallTime(this,before,end,b.r),hit=segmentCircleTime(before,end,p,b.r+p.r);
+   b.life-=dt;const t=Math.min(1,wall,hit);b.x=before.x+(end.x-before.x)*t;b.y=before.y+(end.y-before.y)*t;
+   if(hit<wall&&hit<=1){this.hitPlayer(b.damage);b.life=0;}else if(wall<=1)b.life=0;
+   if(this.state!=='playing')return;
+  }
   for(const id of ['fire','ice','lightning','orbit']){
    const lv=this.skills[id]||0;this.skillClocks[id]-=dt;if(!lv||this.skillClocks[id]>0)continue;
    if(id==='fire'){this.addEffect('ring',p.x,p.y,125+lv*10,'#dd9463',.5);for(const e of this.enemies)if(distance(e,p)<125+lv*10&&clearLine(this,p,e))this.damageEnemy(e,26*lv*(1+(this.gearStats.fire||0)/100));this.skillClocks[id]=3;}
@@ -193,7 +214,9 @@ export class Game {
    if(id==='lightning'){const enemies=this.enemies.filter(e=>e.hp>0&&distance(e,p)<400&&clearLine(this,p,e)).sort((a,b)=>distance(a,p)-distance(b,p)).slice(0,2+lv);let prev=p;for(const e of enemies){this.effects.push({type:'bolt',x:prev.x,y:prev.y,x2:e.x,y2:e.y,life:.22,maxLife:.22,color:'#bda2de'});this.damageEnemy(e,30*lv*(1+(this.gearStats.lightning||0)/100));prev=e;}this.skillClocks[id]=2;}
    if(id==='orbit'){for(let i=0;i<lv;i++){const a=this.time*2.8+i*Math.PI*2/lv,orb={x:p.x+Math.cos(a)*75,y:p.y+Math.sin(a)*75};for(const e of this.enemies)if(distance(e,orb)<e.r+17&&clearLine(this,p,e))this.damageEnemy(e,18);}this.skillClocks[id]=.25;}
   }
+  if(this.state!=='playing')return;
   this.skillClocks.meteor-=dt;if(this.skills.meteor&&this.skillClocks.meteor<=0){const target=this.nearest(450);if(target){this.addEffect('ring',target.x,target.y,100,'#dd9463',.5);for(const e of this.enemies)if(distance(e,target)<100&&clearLine(this,target,e))this.damageEnemy(e,45*this.skills.meteor*(1+(this.gearStats.fire||0)/100));}this.skillClocks.meteor=3.5;}
+  if(this.state!=='playing')return;
   for(const gem of this.gems){const d=distance(gem,p),radius=125+(this.skills.magnet||0)*35+(this.gearStats.magnet||0);if(d<radius&&clearLine(this,gem,p)){const step=Math.min(d,350*dt);gem.x+=(p.x-gem.x)/(d||1)*step;gem.y+=(p.y-gem.y)/(d||1)*step;}if(d<20){this.gainXp(gem.value);gem.value=0;}}
   // Aggregate distant experience instead of silently discarding progression.
   if(this.gems.length>350){const combined=this.gems.splice(0,this.gems.length-300);this.gems.push({x:combined[0].x,y:combined[0].y,value:combined.reduce((s,g)=>s+g.value,0)});}

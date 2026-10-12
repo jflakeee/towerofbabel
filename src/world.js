@@ -15,7 +15,26 @@ export const gameObstacles=game=>game.worldVersion===1?obstaclesFor(game.floor):
 export function overlaps(x,y,r,o){const dx=x-Math.max(o.x,Math.min(o.x+o.w,x)),dy=y-Math.max(o.y,Math.min(o.y+o.h,y));return dx*dx+dy*dy<r*r;}
 export function isWalkable(game,x,y,r=15){return x>=35&&x<=1565&&y>=35&&y<=1565&&!gameObstacles(game).some(o=>overlaps(x,y,r,o));}
 export function moveEntity(game,entity,dx,dy){const steps=Math.max(1,Math.ceil(Math.hypot(dx,dy)/5));for(let i=0;i<steps;i++){const x=Math.max(35,Math.min(1565,entity.x+dx/steps)),y=Math.max(35,Math.min(1565,entity.y+dy/steps));if(isWalkable(game,x,entity.y,entity.r))entity.x=x;if(isWalkable(game,entity.x,y,entity.r))entity.y=y;}return entity;}
-export function clearLine(game,a,b,r=0){return !gameObstacles(game).some(o=>{let lo=0,hi=1;for(const [axis,min,max] of [['x',o.x-r,o.x+o.w+r],['y',o.y-r,o.y+o.h+r]]){const delta=b[axis]-a[axis];if(Math.abs(delta)<1e-9){if(a[axis]<min||a[axis]>max)return false;}else{const t1=(min-a[axis])/delta,t2=(max-a[axis])/delta;lo=Math.max(lo,Math.min(t1,t2));hi=Math.min(hi,Math.max(t1,t2));if(lo>hi)return false;}}return true;});}
+// First contact along a finite segment, normalized to [0, 1]. Infinity means no hit.
+export function segmentCircleTime(a,b,center,r){
+ const dx=b.x-a.x,dy=b.y-a.y,ox=a.x-center.x,oy=a.y-center.y,c=ox*ox+oy*oy-r*r;
+ if(c<=0)return 0;const length=dx*dx+dy*dy;if(length===0)return Infinity;
+ const projection=ox*dx+oy*dy,discriminant=projection*projection-length*c;if(discriminant<0)return Infinity;
+ const t=(-projection-Math.sqrt(discriminant))/length;return t>=0&&t<=1?t:Infinity;
+}
+export function firstWallTime(game,a,b,r=0){
+ let first=Infinity;
+ for(const o of gameObstacles(game)){
+  let lo=0,hi=1,hit=true;
+  for(const [axis,min,max] of [['x',o.x-r,o.x+o.w+r],['y',o.y-r,o.y+o.h+r]]){
+   const delta=b[axis]-a[axis];if(Math.abs(delta)<1e-9){if(a[axis]<min||a[axis]>max){hit=false;break;}}
+   else{const t1=(min-a[axis])/delta,t2=(max-a[axis])/delta;lo=Math.max(lo,Math.min(t1,t2));hi=Math.min(hi,Math.max(t1,t2));if(lo>hi){hit=false;break;}}
+  }
+  if(hit)first=Math.min(first,lo);
+ }
+ return first;
+}
+export function clearLine(game,a,b,r=0){return firstWallTime(game,a,b,r)===Infinity;}
 export function safeSpawn(game,x,y,r){if(isWalkable(game,x,y,r))return {x,y};for(let radius=20;radius<=250;radius+=20)for(let i=0;i<16;i++){const a=i*Math.PI/8,nx=x+Math.cos(a)*radius,ny=y+Math.sin(a)*radius;if(isWalkable(game,nx,ny,r))return {x:nx,y:ny};}return {x:800,y:800};}
 function routeTarget(game,e,p){const cached=e.route;if(cached&&game.time<cached.until&&Math.hypot(p.x-cached.px,p.y-cached.py)<70&&Math.hypot(e.x-cached.x,e.y-cached.y)>8)return cached;
  const nodes=[{x:e.x,y:e.y},{x:p.x,y:p.y}];for(const o of gameObstacles(game)){const pad=e.r+3;for(const x of [o.x-pad,o.x+o.w+pad])for(const y of [o.y-pad,o.y+o.h+pad])if(isWalkable(game,x,y,e.r))nodes.push({x,y});}
