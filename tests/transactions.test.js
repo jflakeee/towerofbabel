@@ -36,8 +36,8 @@ test('guardian clear automatically equips upgrades even with defeat auto-equip d
  const after=JSON.stringify(p);assert.equal(settleRun(p,g,()=>{}).replayed,true);assert.equal(JSON.stringify(p),after);
  assert.equal(restoreEquipment(p),true);assert.equal(p.equipped.weapon,'old');
 });
-test('defeat still respects the optional auto-equip setting',()=>{
- const p=defaultProfile();p.settings.autoEquip=false;const g=new Game(p);g.state='lost';g.loot=[item('drop',100)];settleRun(p,g,()=>{});assert.equal(p.equipped.weapon,null);
+test('every stage ending equips acquired upgrades even with the legacy setting disabled',()=>{
+ const p=defaultProfile();p.settings.autoEquip=false;const g=new Game(p);g.state='lost';g.loot=[item('drop',100)];settleRun(p,g,()=>{});assert.equal(p.equipped.weapon,'drop');
 });
 test('settlement records equipment changes and diagnostics atomically through reload',()=>{
  const p=defaultProfile(),g=new Game(p);g.state='won';g.loot=[item('reward',100)];g.performance={frames:60,fps:60};
