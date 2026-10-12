@@ -1,7 +1,7 @@
 const BUILD_TIME='__BUILD_TIME__';
 const buildLabel=BUILD_TIME.startsWith('__')?'개발 실행 · 빌드 전':new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(BUILD_TIME))+' KST';
 import {Game,FLOORS,BOSS_PATTERNS,HEROES,SKILLS,UPGRADES,SLOT_NAMES,RARITIES,defaultProfile,loadProfile,equippedStats,costFor,grantRewards,clamp,allItems,organizeInventory} from './engine.js';
-import {editProfile,upgradeRefund,resetUpgrades,buyUpgrade,sellItem,undoSale,autoEquip,restoreEquipment,optionQuote,changeOptions,savePreset,applyPreset,autoUpgrade,socketGem,alchemy,enhanceItem,resetItemEnhancement,settleRun} from './transactions.js';
+import {editProfile,upgradeRefund,resetUpgrades,buyUpgrade,sellItem,undoSale,autoEquip,restoreEquipment,optionQuote,changeOptions,savePreset,applyPreset,prepareRun,socketGem,alchemy,enhanceItem,resetItemEnhancement,settleRun} from './transactions.js';
 import {OPTION_DEFS,normalizeItem,normalizeAutomation,optionText,GEM_DEFS,gemKey,LEGENDARY_EFFECTS} from './content.js';
 import {DIFFICULTIES,normalizeJourney,gameObstacles} from './world.js';
 import {CombatDiagnostics} from './diagnostics.js';
@@ -13,7 +13,18 @@ const KEY='babel-mobile-v1';let storageAvailable=true,profile,store,workerRegist
 try{store=new ProfileStore(localStorage,navigator.locks,KEY);await store.open();const loaded=store.read();profile=loadProfile(loaded.profile);if(loaded.recovered)document.getElementById('save-banner').textContent='백업 저장에서 복구했습니다.';}catch{profile=defaultProfile();storageAvailable=false;}
 let game=null,paused=false,modalKind='',lastFocus=null,audio=null,raf=0,lastTime=0,stepAccumulator=0,saveClock=0,hudClock=0,toastTimer,announcementTimer,autoNoticeTimer,musicClock=0,musicStep=0,w=0,h=0,dpr=1,zoom=1;
 const ctx=$('canvas').getContext('2d'),input={x:0,y:0},joystick=new MobileJoystick(),diagnostics=new CombatDiagnostics();
-function save(){try{if(game&&['playing','choosing'].includes(game.state))profile.run=game.snapshot();store.write(profile);storageAvailable=true;return true;}catch{if(store&&!store.writable)blockWrites();if(storageAvailable){storageAvailable=false;toast('저장하지 못했습니다. 새로고침 전에 저장 백업을 내보내세요.');}return false;}}
+function save(){
+ try{if(game&&['playing','choosing'].includes(game.state))profile.run=game.snapshot();store.write(profile);if(!storageAvailable&&store.writable)$('save-banner').hidden=true;storageAvailable=true;return true;}
+ catch{
+  storageAvailable=false;if(game&&['playing','choosing'].includes(game.state)){paused=true;diagnostics.interrupt();resetInput();}
+  if(store&&!store.writable)blockWrites();else{
+   $('save-banner').hidden=false;$('save-banner').innerHTML='저장 실패 · 진행을 일시정지했습니다. 저장 공간을 확보하거나 현재 진행을 백업하세요. <button id="retry-save">저장 재시도</button><button id="pending-save-export">현재 진행 백업</button>';
+   $('retry-save').onclick=()=>{if(save()){$('battle-help').textContent='저장 완료 · 화면을 터치하면 계속합니다';$('battle-help').hidden=false;toast('현재 진행을 저장했습니다.');}};$('pending-save-export').onclick=exportSave;
+  }
+  return false;
+ }
+}
+
 function toast(message){$('toast').textContent=message;$('toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('show'),2800);}
 function sound(type){
  if(!profile.settings.sound)return;try{audio ||= new(window.AudioContext||window.webkitAudioContext)();audio.resume();const osc=audio.createOscillator(),gain=audio.createGain();const t=audio.currentTime;const freq={start:220,level:660,hit:90,attack:180,win:550,select:440,dash:300}[type]||220;osc.type=type==='hit'?'sawtooth':'sine';osc.frequency.setValueAtTime(freq,t);osc.frequency.exponentialRampToValueAtTime(freq*(type==='hit'?.4:1.6),t+.12);gain.gain.setValueAtTime(.035,t);gain.gain.exponentialRampToValueAtTime(.001,t+.2);osc.connect(gain);gain.connect(audio.destination);osc.start();osc.stop(t+.21);}catch{/* Audio remains optional. */}
@@ -97,9 +108,13 @@ function showDiagnostics(){
  $('export-diagnostics').onclick=()=>exportSave({build:BUILD_TIME,current,history:rows.map(r=>({floor:r.floor,hero:r.hero,state:r.state,performance:r.performance}))},'babel-performance.json');
 }
 function showResearch(){openModal('research',`${header('BENCHMARK NOTES','리서치 노트')}<p>Steam 공식 소개, 유튜브 영상 설명·챕터, 공개 리뷰를 교차 검토했습니다. 영상 재생 화면과 전체 자막은 확보하지 못했습니다.</p><div class="item-row"><div><strong>생존 × 장비 성장</strong><p>군집 전투와 스킬 선택을 유지하고, 획득 장비와 영구 강화를 다음 도전에 연결합니다.</p></div></div><div class="item-row"><div><strong>모바일에 맞춘 재설계</strong><p>세로 화면 · 자동 조준 · 90초 웨이브 · 자동 축복 · 전용 스킬 분기 · 장비·보석 커스텀 · 전투 저장</p></div></div><a class="research-card" target="_blank" rel="noopener" href="https://www.youtube.com/watch?v=247FHP-4Qj4">The Singleplayer Squad · 데모 설명과 첫인상 ↗<small>2025-05-16 · 성장, 장비, 허브, 전투 챕터</small></a><a class="research-card" target="_blank" rel="noopener" href="https://www.youtube.com/watch?v=A9k4x44LRqw">무해설 데모 플레이 영상 ↗<small>재생 화면 분석은 추가 검증 필요</small></a><a class="research-card" target="_blank" rel="noopener" href="https://www.youtube.com/watch?v=yvjJV2nTcmY">Gameplay 영상 ↗<small>검색 색인에서 영상 존재 확인</small></a><a class="research-card" target="_blank" rel="noopener" href="https://store.steampowered.com/app/2665680/Tower_of_Babel_Survivors_of_Chaos/?l=koreana">벤치마크 · Steam 공식 소개 ↗<small>원작: NANOO · 본 게임은 독립 프로토타입</small></a><p class="notes">전체 분석과 구현 대응표는 GitHub의 docs/research.md를 참고하세요.</p>`);}
-function startGame(resume=false){
- if(!store?.writable){blockWrites();return;}$('result-page').hidden=true;$('home').hidden=false;closeModal();if(resume){game=Game.restore(profile,profile.run);if(!game){renderHome();toast('전투 저장을 읽지 못했습니다. 설정에서 백업을 내보내고 새 도전을 시작하세요.');return;}}else{if(profile.automation.upgradeBudget>0){const result=autoUpgrade(profile,crypto.randomUUID(),persistTransaction);if(!result.ok){toast(result.error);return;}}game=new Game(profile);}
- diagnostics.start({build:BUILD_TIME,width:window.innerWidth,height:window.innerHeight,quality:profile.settings.quality,resumed:resume});stepAccumulator=0;paused=false;$('battle').hidden=false;document.body.style.overflow='hidden';resize();applyControls();lastTime=performance.now();saveClock=0;hudClock=0;updateHud();draw();cancelAnimationFrame(raf);raf=requestAnimationFrame(loop);save();sound('start');
+function startGame(resume=false,floor=profile.selectedFloor){
+ if(!store?.writable){blockWrites();return;}
+ const prepared=prepareRun(profile,{resume,floor,id:crypto.randomUUID()},persistTransaction);
+ if(!prepared.ok){transactionResult(prepared);return;}
+ game=prepared.game;storageAvailable=true;$('result-page').hidden=true;$('home').hidden=false;closeModal();
+
+ diagnostics.start({build:BUILD_TIME,width:window.innerWidth,height:window.innerHeight,quality:profile.settings.quality,resumed:resume});stepAccumulator=0;paused=false;$('battle').hidden=false;document.body.style.overflow='hidden';resize();applyControls();lastTime=performance.now();saveClock=0;hudClock=0;updateHud();draw();cancelAnimationFrame(raf);raf=requestAnimationFrame(loop);sound('start');
  if(game.state==='choosing')showChoices();else announce(`${String(game.floor).padStart(2,'0')}F · ${FLOORS[game.floor-1].name}`);
  $('battle-help').textContent='화면 어디든 드래그해 이동 · 나머지는 자동';$('battle-help').hidden=false;setTimeout(()=>{if(!paused)$('battle-help').hidden=true;},6000);$('auto-status').textContent=`자동 선택 성향 · ${STRATEGIES[game.autoStrategy]||'균형'}`;
 }
@@ -118,6 +133,7 @@ function resetInput(){const id=joystick.pointerId;joystick.reset();refreshDirect
 function applyControls(){document.documentElement.style.setProperty('--pad-size',`${profile.settings.padSize}px`);document.body.classList.toggle('large-text',profile.settings.textSize==='large');document.querySelector('.controls').style.justifyContent=profile.settings.leftHanded?'flex-end':'flex-start';const abilities=document.querySelector('.auto-abilities');abilities.style.left=profile.settings.leftHanded?'24px':'auto';abilities.style.right=profile.settings.leftHanded?'auto':'24px';}
 $('battle').addEventListener('pointerdown',e=>{
  if(!game||!['playing','choosing'].includes(game.state)||(e.pointerType==='mouse'&&e.button!==0)||document.hidden||$('battle').hidden||!$('overlay').hidden)return;
+ if(!storageAvailable&&!save())return;
  const previousPointer=joystick.pointerId;
  if(!joystick.begin(e.pointerId,e.clientX,e.clientY,$('joystick').getBoundingClientRect()))return;
  if(paused){paused=false;lastTime=performance.now();$('battle-help').textContent='화면 어디든 드래그해 이동 · 나머지는 자동';}
@@ -142,7 +158,7 @@ function finishGame(){
  const won=game.state==='won',settled=settleRun(profile,game,persistTransaction);if(!settled.ok){showResultPage(`<h2 id="dialog-title">보상 저장 대기</h2><p>${esc(settled.error)}<br>현재 전투 결과는 메모리에 보관 중입니다. 저장에 성공할 때까지 이 화면을 유지하세요.</p><button id="retry-reward" class="primary">보상 저장 다시 시도</button><button id="export-pending" class="secondary">미정산 결과 백업 내보내기</button>`);$('retry-reward').onclick=finishGame;$('export-pending').onclick=()=>{const draft=structuredClone(profile),copy=structuredClone(game.snapshot());grantRewards(draft,copy);const previous=profile;profile=draft;exportSave();profile=previous;};return;}renderHome();sound(won?'win':'hit');
  showResultPage(`<span class="section-kicker">${won?'FLOOR CONQUERED':'THE TOWER REMEMBERS'}</span><h2 id="dialog-title" class="game-over-title">${won?'탑이 당신을 인정합니다.':'성장은, 사라지지 않습니다.'}</h2><p>${DIFFICULTIES[game.difficulty].name} · ${game.mode==='chaos'?'혼돈 '+game.depth+'단계 · ':''}${game.floor}층 · ${FLOORS[game.floor-1].name} ${won?'정복':'도전 종료'}${won&&game.floor===5&&game.mode==='tower'?' · 난이도·혼돈 해금 상태를 로비에서 확인하세요':''}</p><div class="stats-grid"><div><span>처치한 적</span><strong>${game.kills}</strong></div><div><span>획득 파편</span><strong>+${game.gold+(won?60*game.floor:15)}</strong></div><div><span>도달 레벨</span><strong>${game.level}</strong></div><div><span>생존 시간</span><strong>${formatTime(game.time)}</strong></div></div><div class="build-list"><strong>자동 선택 기록</strong>${decisionHistory(game.decisionLog)||'<p>축복 선택 없음</p>'}</div><div class="build-list"><strong>장비 자동 장착</strong>${equipmentHistory(profile.history.find(r=>r.id===game.runId)?.equipment)}<p>추천 장비 비교 완료 · 더 좋은 장비 자동 장착 · 잠근 부위 유지</p><p id="result-equipped">${Object.keys(SLOT_NAMES).map(slot=>`${SLOT_NAMES[slot]}: ${esc(allItems(profile).find(i=>i.id===profile.equipped[slot])?.name||'없음')}`).join(' · ')}</p></div><div class="build-list"><strong>획득 재료</strong><p>${game.materialLoot.map(g=>gemLabel(g)).join(' · ')||'없음'}</p></div>${game.loot.map(i=>{const old=allItems(profile).find(g=>g.id===profile.equipped[i.slot]);return `<div class="item-row"><span class="rarity-${i.rarity}">${svg(i.slot==='weapon'?'sword':i.slot==='armor'?'shield':'gem')}</span><div><strong class="rarity-${i.rarity}">${esc(i.name)}</strong><p>${itemText(i)} · 현재 ${old?.value||0} → ${i.value}</p></div><button data-result-equip="${esc(i.id)}" ${old?.id===i.id?'disabled':''}>${old?.id===i.id?'장착 중':'장착'}</button></div>`;}).join('')}<button class="primary" id="result-home">보상 확인 · 로비로 ${svg('arrow')}</button>${won&&game.floor<5&&game.mode==='tower'?'<button class="secondary" id="next-floor">다음 층 도전하기</button>':''}`);
  $('result-page').querySelectorAll('[data-result-equip]').forEach(b=>b.onclick=()=>{const i=allItems(profile).find(i=>i.id===b.dataset.resultEquip);if(i){if(!applyProfileEdit(p=>{p.equipped[i.slot]=i.id;}))return;$('result-page').querySelectorAll('[data-result-equip]').forEach(button=>{const item=allItems(profile).find(i=>i.id===button.dataset.resultEquip);const equipped=item&&profile.equipped[item.slot]===item.id;button.textContent=equipped?'장착 중':'장착';button.disabled=!!equipped;});$('result-equipped').textContent=Object.keys(SLOT_NAMES).map(slot=>`${SLOT_NAMES[slot]}: ${allItems(profile).find(i=>i.id===profile.equipped[slot])?.name||'없음'}`).join(' · ');toast('다음 전투부터 장비 효과가 적용됩니다.');}});
- $('result-home').onclick=goHome;if($('next-floor'))$('next-floor').onclick=()=>{profile.selectedFloor=Math.min(5,game.floor+1);startGame();};
+ $('result-home').onclick=goHome;if($('next-floor'))$('next-floor').onclick=()=>startGame(false,Math.min(5,game.floor+1));
 }
 function announce(message){$('announcement').textContent=message;$('announcement').classList.add('show');clearTimeout(announcementTimer);announcementTimer=setTimeout(()=>$('announcement').classList.remove('show'),2200);}
 function formatTime(seconds){return `${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(Math.floor(seconds%60)).padStart(2,'0')}`;}
@@ -165,7 +181,7 @@ function loop(now){
  const dt=Math.min(Math.max(0,(now-lastTime)/1000),.2);lastTime=now;
  if(game&&!paused&&['playing','choosing'].includes(game.state)){
   diagnostics.frame(now,game.enemies.length,game.projectiles.length+game.enemyShots.length);musicTick(dt);stepAccumulator+=dt;while(stepAccumulator>=1/60&&game&&!paused&&['playing','choosing'].includes(game.state)){
-   stepAccumulator-=1/60;if(game.state==='choosing')showChoices();automateAbilities(game,input);if(game.state==='playing')game.update(1/60,input);
+   stepAccumulator-=1/60;if(game.state==='choosing')showChoices();if(paused)break;automateAbilities(game,input);if(game.state==='playing')game.update(1/60,input);
    if(game.event==='boss')announce('수문장이 깨어납니다');if(game.event==='hit')sound('hit');if(game.state==='choosing')showChoices();if(['won','lost'].includes(game.state)){finishGame();stepAccumulator=0;break;}
    saveClock+=1/60;if(saveClock>5){save();saveClock=0;}
   }

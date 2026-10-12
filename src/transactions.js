@@ -1,5 +1,5 @@
 import {normalizeItem,rollOption,OPTION_DEFS,itemStats,normalizeAutomation,normalizeGem,gemKey} from './content.js';
-import {UPGRADES,SLOT_NAMES,costFor,allItems,organizeInventory,seededRandom,grantRewards} from './engine.js';
+import {Game,UPGRADES,SLOT_NAMES,costFor,allItems,organizeInventory,seededRandom,grantRewards} from './engine.js';
 export function upgradeRefund(profile){return UPGRADES.reduce((sum,u)=>{for(let i=0;i<profile.upgrades[u.id];i++)sum+=costFor(i);return sum;},0);}
 export function transact(profile,id,operation,persist=()=>{}){
  if(profile.appliedTransactionIds?.includes(id)||profile.transactions.some(t=>t.id===id))return {ok:true,replayed:true};
@@ -49,3 +49,15 @@ export function resetItemEnhancement(profile,itemId,id,persist,revision){return 
  },persist);}
 
 export function settleRun(profile,run,persist){if(!['won','lost'].includes(run.state))return {ok:false,error:'종료된 전투만 정산할 수 있습니다.'};const id=`reward:${run.runId}`;const result=transact(profile,id,p=>{const copy=structuredClone(run.snapshot());if(!grantRewards(p,copy))return {ok:true,record:{type:'reward',runId:run.runId,duplicate:true}};const before={...p.equipped};autoEquip(p);const equipment=Object.keys(SLOT_NAMES).map(slot=>({slot,before:before[slot],after:p.equipped[slot],beforeName:allItems(p).find(i=>i.id===before[slot])?.name||'없음',afterName:allItems(p).find(i=>i.id===p.equipped[slot])?.name||'없음',reason:p.lockedSlots[slot]?'잠근 부위 유지':before[slot]!==p.equipped[slot]?'추천 점수 개선':'현재 장비 유지'}));const history=p.history.find(r=>r.id===run.runId);if(history){history.equipment=equipment;if(copy.performance)history.performance=structuredClone(copy.performance);}return {ok:true,record:{type:'reward',runId:run.runId,gold:copy.gold,materials:copy.materialLoot}};},persist);if(result.ok)run.rewarded=true;return result;}
+
+// Preparation commits one draft: automatic spending cannot outlive a failed run save.
+export function prepareRun(profile,{resume=false,floor=profile.selectedFloor,id}={},persist){
+ return editProfile(profile,p=>{
+  if(resume){const game=Game.restore(p,p.run);if(!game)return {ok:false,error:'전투 저장을 읽지 못했습니다. 백업을 내보낸 뒤 새 도전을 시작하세요.'};p.run=game.snapshot();return {ok:true,game};}
+  if(p.run)return {ok:false,error:'저장된 전투를 먼저 이어하거나 정산하세요.'};
+  if(!Number.isInteger(floor)||floor<1||floor>p.unlocked)return {ok:false,error:'아직 도전할 수 없는 층입니다.'};
+  p.selectedFloor=floor;
+  if(p.automation.upgradeBudget>0){if(typeof id!=='string'||!id)return {ok:false,error:'도전 준비 식별자가 없습니다.'};const upgraded=autoUpgrade(p,id,()=>{});if(!upgraded.ok)return upgraded;}
+  const game=new Game(p);p.run=game.snapshot();return {ok:true,game};
+ },persist);
+}
