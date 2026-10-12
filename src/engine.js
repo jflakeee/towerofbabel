@@ -59,7 +59,7 @@ export function loadProfile(raw){
  p.selectedHero=HEROES[raw.selectedHero]?raw.selectedHero:'knight';p.selectedFloor=clamp(Math.floor(Number(raw.selectedFloor)||1),1,p.unlocked);
  for(const u of UPGRADES)p.upgrades[u.id]=clamp(Math.floor(Number(raw.upgrades?.[u.id])||0),0,u.max);
  const valid=i=>i&&SLOT_NAMES[i.slot]&&Number.isFinite(i.value)&&i.value>=0&&typeof i.name==='string'&&typeof i.id==='string'&&Number.isInteger(i.rarity)&&i.rarity>=0&&i.rarity<5;
- p.inventory=[...(Array.isArray(raw.inventory)?raw.inventory:[]),...(Array.isArray(raw.overflow)?raw.overflow:[])].filter(valid).map(normalizeItem);
+ p.inventory=[...(Array.isArray(raw.overflow)?raw.overflow:[]),...(Array.isArray(raw.inventory)?raw.inventory:[])].filter(valid).map(normalizeItem);
  p.transactions=Array.isArray(raw.transactions)?raw.transactions.filter(t=>t&&typeof t.id==='string'&&['sell','undo-sale','reset','upgrade','options','auto-upgrade','socket','alchemy','item-enhance','item-reset','reward'].includes(t.type)&&(t.type!=='sell'||(valid(t.item)&&Number.isFinite(t.payout)&&t.payout>=0))).slice(-20):[];
  p.automation=normalizeAutomation(raw.automation);
  for(const hero of Object.keys(HEROES))p.presets[hero]=Array.from({length:3},(_,i)=>{const preset=raw.presets?.[hero]?.[i];return preset&&typeof preset.name==='string'?{name:preset.name.slice(0,40),strategy:['balanced','survival','attack','farming','custom'].includes(preset.strategy)?preset.strategy:'balanced',automation:normalizeAutomation(preset.automation),equipped:Object.fromEntries(Object.keys(SLOT_NAMES).map(slot=>[slot,typeof preset.equipped?.[slot]==='string'?preset.equipped[slot]:null])),lockedSlots:Object.fromEntries(Object.keys(SLOT_NAMES).map(slot=>[slot,preset.lockedSlots?.[slot]===true]))}:null;});
@@ -75,7 +75,8 @@ export function loadProfile(raw){
  p.run=raw.run&&[1,2].includes(raw.run.version)?raw.run:null;return p;
 }
 export function allItems(profile){return [...profile.inventory,...(profile.overflow||[])];}
-export function organizeInventory(profile){const unique=[...new Map(allItems(profile).map(i=>[i.id,i])).values()],worn=new Set(Object.values(profile.equipped));const protectedItems=unique.filter(i=>worn.has(i.id)),rest=unique.filter(i=>!worn.has(i.id));const room=Math.max(0,100-protectedItems.length);profile.inventory=[...protectedItems,...rest.slice(-room)];profile.overflow=rest.slice(0,Math.max(0,rest.length-room));}
+// Overflow precedes the active bag so repeated organization keeps newest rewards in the bag.
+export function organizeInventory(profile){const unique=[...new Map([...(profile.overflow||[]),...(profile.inventory||[])].map(i=>[i.id,i])).values()],worn=new Set(Object.values(profile.equipped));const protectedItems=unique.filter(i=>worn.has(i.id)),rest=unique.filter(i=>!worn.has(i.id));const room=Math.max(0,100-protectedItems.length);profile.inventory=[...protectedItems,...rest.slice(-room)];profile.overflow=rest.slice(0,Math.max(0,rest.length-room));}
 export function equippedStats(profile){const stats={damage:0,hp:0,crit:0,haste:0,magnet:0,fortune:0,fire:0,ice:0,lightning:0,echo:0,regen:0,novaHaste:0};for(const slot of Object.keys(SLOT_NAMES)){const i=allItems(profile).find(i=>i.id===profile.equipped[slot]);if(i){const value=itemStats(i);for(const key of Object.keys(stats))stats[key]+=value[key]||0;}}return stats;}
 export function makeLoot(floor,rng=Math.random,forceRare=false){
  const roll=rng(),rarity=forceRare?Math.min(4,2+Math.floor(rng()*3)):roll>.98?4:roll>.9?3:roll>.68?2:roll>.35?1:0;

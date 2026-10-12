@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {Game,defaultProfile,loadProfile,seededRandom,grantRewards,makeLoot,SKILLS,equippedStats} from '../src/engine.js';
+import {Game,defaultProfile,loadProfile,seededRandom,grantRewards,makeLoot,SKILLS,equippedStats,organizeInventory} from '../src/engine.js';
 const makeGame=(seed=123,hero='knight')=>{const p=defaultProfile();p.selectedHero=hero;return new Game(p,{rng:seededRandom(seed)});};
 test('all heroes move within arena bounds; diagonal movement is normalized',()=>{
  for(const hero of ['knight','mage','ranger']){const a=makeGame(1,hero),b=makeGame(1,hero);a.update(.05,{x:1,y:0});b.update(.05,{x:1,y:1});assert.ok(Math.abs(Math.hypot(a.player.x-800,a.player.y-800)-Math.hypot(b.player.x-800,b.player.y-800))<1e-9);a.player.x=1565;a.player.y=35;a.update(.05,{x:1,y:-1});assert.equal(a.player.x,1565);assert.equal(a.player.y,35);}
@@ -69,4 +69,25 @@ test('defeated enemies drop experience points that persist until collected and s
  assert.equal(g.gems.length,1);assert.deepEqual(g.gems[0],{x:1000,y:800,value:1});assert.equal(g.xp,0);
  g.update(1/60);assert.equal(g.gems.length,1);const resumed=Game.restore(p,g.snapshot());assert.deepEqual(resumed.gems,g.gems);
  resumed.player.x=1000;resumed.update(1/60);assert.equal(resumed.gems.length,0);assert.equal(resumed.xp,1);resumed.update(1/60);assert.equal(resumed.xp,1);
+});
+
+
+test('overflow organization is stable across repeated reloads and preserves newest rewards',()=>{
+ const p=defaultProfile();
+ p.inventory=Array.from({length:125},(_,i)=>({...makeLoot(1,seededRandom(i+1)),id:`stable-${i}`}));
+ p.equipped.weapon=p.inventory.find(i=>i.slot==='weapon').id;
+ organizeInventory(p);
+ const equipped=p.equipped.weapon,initial=p.inventory.map(i=>i.id),overflow=p.overflow.map(i=>i.id);
+ assert.equal(initial.length,100);assert.equal(overflow.length,25);assert.ok(initial.includes(equipped));assert.ok(initial.includes('stable-124'));
+ let restored=p;
+ for(let n=0;n<5;n++){
+  organizeInventory(restored);restored=loadProfile(JSON.parse(JSON.stringify(restored)));
+  assert.deepEqual(restored.inventory.map(i=>i.id),initial);assert.deepEqual(restored.overflow.map(i=>i.id),overflow);
+ }
+ restored.inventory.push({...makeLoot(1,seededRandom(999)),id:'newest-reward'});organizeInventory(restored);
+ assert.equal(restored.inventory.length,100);assert.equal(restored.overflow.length,26);
+ assert.ok(restored.inventory.some(i=>i.id==='newest-reward'));assert.ok(restored.inventory.some(i=>i.id===equipped));
+ const stable=JSON.stringify([restored.inventory,restored.overflow]);organizeInventory(restored);
+ assert.equal(JSON.stringify([restored.inventory,restored.overflow]),stable);
+ assert.equal(new Set([...restored.inventory,...restored.overflow].map(i=>i.id)).size,126);
 });
