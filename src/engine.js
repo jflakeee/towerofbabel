@@ -106,6 +106,21 @@ export class Game {
   this.skills={};this.enemies=[];this.projectiles=[];this.enemyShots=[];this.gems=[];this.effects=[];this.texts=[];this.loot=[];this.choices=[];
   this.spawnClock=0;this.attackClock=.2;this.skillClocks={fire:1,ice:2,lightning:1,orbit:.4,meteor:2};this.dashCd=0;this.novaCd=0;this.dashTime=0;this.dashDir={x:1,y:0};this.pendingLevels=0;this.rerolls=1;this.bossSpawned=false;this.bossId=null;this.id=0;this.rewarded=false;this.event=null;this.damageFlash=0;
  }
+ static continueStage(profile,previous){
+  const game=new Game(profile,{hero:previous.hero});
+  for(const key of ['skills','level','xp','nextXp','pendingLevels','rerolls','automation','autoStrategy','attackClock','skillClocks','dashCd','novaCd','dashTime','dashDir'])game[key]=structuredClone(previous[key]);
+  // Apply only the equipment difference; do not replay healing or level-up effects.
+  const oldGear=previous.gearStats,newGear=game.gearStats;
+  game.player.maxHp=previous.player.maxHp-oldGear.hp+newGear.hp;
+  game.player.hp=Math.min(previous.player.hp,game.player.maxHp);
+  game.player.damage=previous.player.damage-oldGear.damage+newGear.damage;
+  game.player.crit=previous.player.crit-oldGear.crit+newGear.crit;
+  for(const key of ['speed','face','invulnerable'])game.player[key]=previous.player[key];
+  game.fortune=previous.fortune+(newGear.fortune-oldGear.fortune)/100;
+  game.rng.setState(previous.rng.getState());game.lootRng.setState(previous.lootRng.getState());
+  if(game.pendingLevels)game.offerChoices();
+  return game;
+ }
  static restore(profile,snapshot){
   if(!snapshot||![1,2].includes(snapshot.version)||!HEROES[snapshot.hero]||!['playing','choosing'].includes(snapshot.state)||!snapshot.player||!Number.isFinite(snapshot.player.hp)||snapshot.player.hp<=0||!Number.isFinite(snapshot.time)||snapshot.time<0||snapshot.floor<1||snapshot.floor>5||!Array.isArray(snapshot.enemies))return null;
   if(!Number.isFinite(snapshot.player.r)||snapshot.player.r<1||snapshot.player.r>60||snapshot.player.speed<0||snapshot.player.speed>1000||snapshot.enemies.length>101)return null;

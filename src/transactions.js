@@ -79,8 +79,8 @@ export function advanceStage(profile,run,persist){
   const settled=settleRun(p,copy,()=>{});if(!settled.ok)return settled;
   if(run.mode==='tower'&&run.floor<5)p.selectedFloor=run.floor+1;
   else if(run.mode==='tower'){p.journey.mode='chaos';p.journey.chaosDepth=1;}
-  // No automatic paid upgrades between stages; only newly equipped gear applies.
-  const game=new Game(p);p.run=game.snapshot();return {ok:true,game};
+  // Keep the live build and apply only newly equipped gear, without paid upgrades.
+  const game=Game.continueStage(p,run);p.run=game.snapshot();return {ok:true,game};
  },persist);
  if(result.ok)run.rewarded=true;return result;
 }

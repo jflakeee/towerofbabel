@@ -21,3 +21,27 @@ test('tower completion enters chaos and chaos advances to a repeatable stage 20'
 test('unfinished stages cannot trigger rewards or progression',()=>{
  const p=defaultProfile(),g=new Game(p),before=structuredClone(p);assert.equal(advanceStage(p,g,()=>{}).ok,false);assert.deepEqual(p,before);
 });
+
+test('continuous stages keep skills, experience, health and cooldowns through save and resume',()=>{
+ for(const hero of ['knight','mage','ranger']){
+  const p=defaultProfile();p.selectedHero=hero;p.unlocked=5;
+  let g=new Game(p,{seed:7});g.skills={power:3,vitality:2,haste:2,fire:2};g.player.maxHp+=50;g.player.hp=57;
+  g.level=9;g.xp=13;g.nextXp=60;g.novaCd=7;g.dashCd=2;g.attackClock=.3;g.skillClocks.fire=1.7;g.rerolls=0;
+  for(let n=0;n<3;n++){
+   g.state='won';p.run=g.snapshot();const previous=g;
+   const r=advanceStage(p,g,()=>{});assert.equal(r.ok,true);g=r.game;
+   assert.deepEqual(g.skills,previous.skills);assert.equal(g.level,9);assert.equal(g.xp,13);assert.equal(g.nextXp,60);
+   assert.equal(g.player.hp,57);assert.equal(g.player.maxHp,previous.player.maxHp);assert.equal(g.novaCd,7);assert.equal(g.dashCd,2);assert.equal(g.attackClock,.3);assert.equal(g.skillClocks.fire,1.7);assert.equal(g.rerolls,0);
+   const restored=Game.restore(p,p.run);assert.ok(restored);assert.deepEqual(restored.skills,g.skills);assert.equal(restored.player.hp,57);assert.equal(restored.level,9);
+   assert.notEqual(g.runId,previous.runId);assert.equal(g.time,0);assert.deepEqual(g.loot,[]);assert.deepEqual(g.materialLoot,[]);
+  }
+ }
+});
+test('new equipment keeps enhancements and sockets while retained vitality applies only once',()=>{
+ const p=defaultProfile();p.inventory=[{id:'old',name:'old',slot:'armor',value:10,rarity:2,options:[],sockets:[],enhancement:0}];p.equipped.armor='old';
+ let g=new Game(p,{seed:1});g.skills.vitality=2;g.player.maxHp+=50;g.player.hp=80;
+ g.loot=[{id:'new-armor',name:'new',slot:'armor',value:100,rarity:3,options:[{key:'hp',value:20}],sockets:[{kind:'emerald',tier:2}],enhancement:2,enhanceSpent:80}];g.state='won';p.run=g.snapshot();
+ const before=g.player.maxHp,r=advanceStage(p,g,()=>{});assert.equal(r.ok,true);g=r.game;
+ assert.equal(g.appearance.armor.enhancement,2);assert.deepEqual(g.appearance.armor.sockets[0],{kind:'emerald',tier:2});assert.equal(g.player.maxHp,before-10+164);assert.equal(g.player.hp,80);assert.equal(g.skills.vitality,2);
+ const hp=g.player.maxHp;g.state='won';p.run=g.snapshot();const next=advanceStage(p,g,()=>{});assert.equal(next.game.player.maxHp,hp);assert.equal(p.inventory.filter(i=>i.id==='new-armor').length,1);
+});
