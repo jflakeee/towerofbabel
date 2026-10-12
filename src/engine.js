@@ -104,11 +104,11 @@ export class Game {
   this.autoStrategy=profile.settings.strategy||'balanced';this.decisionLog=[];
   this.fortune=1+profile.upgrades.fortune*.1+gear.fortune/100;this.state='playing';this.time=0;this.duration=90;this.kills=0;this.gold=0;this.level=1;this.xp=0;this.nextXp=8;
   this.skills={};this.enemies=[];this.projectiles=[];this.enemyShots=[];this.gems=[];this.effects=[];this.texts=[];this.loot=[];this.choices=[];
-  this.spawnClock=0;this.attackClock=.2;this.skillClocks={fire:1,ice:2,lightning:1,orbit:.4,meteor:2};this.dashCd=0;this.novaCd=0;this.dashTime=0;this.dashDir={x:1,y:0};this.pendingLevels=0;this.rerolls=1;this.bossSpawned=false;this.bossId=null;this.id=0;this.rewarded=false;this.event=null;this.damageFlash=0;
+  this.regenClock=0;this.spawnClock=0;this.attackClock=.2;this.skillClocks={fire:1,ice:2,lightning:1,orbit:.4,meteor:2};this.dashCd=0;this.novaCd=0;this.dashTime=0;this.dashDir={x:1,y:0};this.pendingLevels=0;this.rerolls=1;this.bossSpawned=false;this.bossId=null;this.id=0;this.rewarded=false;this.event=null;this.damageFlash=0;
  }
  static continueStage(profile,previous){
   const game=new Game(profile,{hero:previous.hero});
-  for(const key of ['skills','level','xp','nextXp','pendingLevels','rerolls','automation','autoStrategy','attackClock','skillClocks','dashCd','novaCd','dashTime','dashDir'])game[key]=structuredClone(previous[key]);
+  for(const key of ['regenClock','skills','level','xp','nextXp','pendingLevels','rerolls','automation','autoStrategy','attackClock','skillClocks','dashCd','novaCd','dashTime','dashDir'])game[key]=structuredClone(previous[key]);
   // Apply only the equipment difference; do not replay healing or level-up effects.
   const oldGear=previous.gearStats,newGear=game.gearStats;
   game.player.maxHp=previous.player.maxHp-oldGear.hp+newGear.hp;
@@ -135,6 +135,7 @@ export class Game {
   if(snapshot.enemies.some(e=>e.attackRadius!==undefined&&(!Number.isFinite(e.attackRadius)||e.attackRadius<40||e.attackRadius>200)||e.windup!==undefined&&(!Number.isFinite(e.windup)||e.windup<.2||e.windup>3)))return null;
   if(snapshot.enemies.some(e=>!['grunt','runner','caster','elite','boss'].includes(e.type)||['id','r','hp','maxHp','speed','damage','slow','hit','cooldown','telegraph','targetX','targetY'].some(k=>!Number.isFinite(e[k])))||['projectiles','enemyShots'].some(k=>snapshot[k].some(b=>['vx','vy','r','damage','life'].some(f=>!Number.isFinite(b[f]))))||snapshot.gems.some(g=>!Number.isFinite(g.value)))return null;
   if(snapshot.enemies.some(e=>e.r<1||e.r>60||e.speed<0||e.speed>1000)||snapshot.projectiles.length>500||snapshot.enemyShots.length>1000||snapshot.gems.length>351||['projectiles','enemyShots'].some(k=>snapshot[k].some(b=>Math.abs(b.vx)>5000||Math.abs(b.vy)>5000||b.r<1||b.r>64)))return null;
+  if(snapshot.regenClock!==undefined&&(!Number.isFinite(snapshot.regenClock)||snapshot.regenClock<0||snapshot.regenClock>=3))return null;
   const game=new Game(profile);game.difficulty='normal';game.mode='tower';game.depth=1;game.appearance={};for(const key of Object.keys(game)){if(!['rng','lootRng'].includes(key)&&snapshot[key]!==undefined)game[key]=snapshot[key];}if(Number.isInteger(snapshot.rngState))game.rng.setState(snapshot.rngState);if(Number.isInteger(snapshot.lootRngState))game.lootRng.setState(snapshot.lootRngState);game.automation=normalizeAutomation(game.automation);game.gearStats=game.gearStats&&typeof game.gearStats==='object'?game.gearStats:equippedStats(defaultProfile());for(const key of Object.keys(equippedStats(defaultProfile())))if(!Number.isFinite(game.gearStats?.[key]))game.gearStats[key]=0;
   if(!['balanced','survival','attack','farming','custom'].includes(game.autoStrategy))game.autoStrategy='balanced';game.decisionLog=Array.isArray(game.decisionLog)?game.decisionLog.filter(d=>d&&typeof d.id==='string'&&typeof d.reason==='string').slice(-200):[];if(!DIFFICULTIES[game.difficulty])return null;if(!['tower','chaos'].includes(game.mode)||!Number.isInteger(game.depth)||game.depth<1||game.depth>20)return null;game.worldVersion=snapshot.worldVersion===1?1:0;game.appearance=Object.fromEntries(Object.keys(SLOT_NAMES).map(slot=>{const item=game.appearance?.[slot];return [slot,item&&item.slot===slot&&Number.isInteger(item.rarity)&&item.rarity>=0&&item.rarity<=4&&Number.isFinite(item.value)?normalizeItem(item):null];}));game.materialLoot=Array.isArray(game.materialLoot)?game.materialLoot.filter(g=>GEM_DEFS[g?.kind]&&Number.isInteger(g.tier)&&g.tier>=1&&g.tier<=3):[];game.skillClocks.meteor=Number.isFinite(game.skillClocks.meteor)?game.skillClocks.meteor:2;for(const entity of [game.player,...game.enemies])Object.assign(entity,safeSpawn(game,entity.x,entity.y,entity.r));game.event=null;game.effects=[];game.texts=[];return game;
  }
@@ -180,6 +181,7 @@ export class Game {
  nova(){if(this.state!=='playing'||this.novaCd>0)return false;this.novaCd=12*(1-(this.gearStats.novaHaste||0)*.2);this.player.invulnerable=.4;this.addEffect('ring',this.player.x,this.player.y,240,'#d5ae71',.7);for(const e of this.enemies)if(distance(e,this.player)<240&&clearLine(this,this.player,e)){this.damageEnemy(e,100+this.level*7);const a=Math.atan2(e.y-this.player.y,e.x-this.player.x);moveEntity(this,e,Math.cos(a)*55,Math.sin(a)*55);}return true;}
  update(delta,input={x:0,y:0}){
   if(this.state!=='playing')return;const dt=clamp(delta,0,.05),p=this.player;this.time+=dt;this.event=null;
+  this.regenClock+=dt;if(this.regenClock>=3-1e-9){this.regenClock=Math.max(0,this.regenClock-3);p.hp=Math.min(p.maxHp,p.hp+p.maxHp*.01);}
   for(const k of ['dashCd','novaCd','dashTime','damageFlash'])this[k]=Math.max(0,this[k]-dt);p.invulnerable=Math.max(0,p.invulnerable-dt);
   const mag=Math.hypot(input.x,input.y),mx=mag>1?input.x/mag:input.x,my=mag>1?input.y/mag:input.y;
   if(mag>.05)p.face=Math.atan2(my,mx);

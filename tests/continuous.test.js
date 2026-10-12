@@ -65,3 +65,17 @@ test('recovery of a final tower victory continues into chaos, while defeat stays
  }
  const p=defaultProfile(),g=new Game(p);assert.equal(continuousRunBackup(p,g).ok,false);
 });
+
+
+test('base regeneration ticks at three seconds and survives stage changes and reloads',()=>{
+ const p=defaultProfile();let g=new Game(p,{seed:1});g.spawnClock=g.attackClock=100;g.player.hp=50;
+ for(let i=0;i<59;i++)g.update(.05);assert.equal(g.player.hp,50);
+ const restored=Game.restore(p,g.snapshot());restored.update(.05);assert.ok(Math.abs(restored.player.hp-51.4)<1e-8);
+ g.state='won';p.run=g.snapshot();g=advanceStage(p,g,()=>{}).game;g.spawnClock=g.attackClock=100;g.update(.05);assert.ok(Math.abs(g.player.hp-51.4)<1e-8);
+ g.player.hp=g.player.maxHp-.1;g.regenClock=2.99;g.update(.02);assert.equal(g.player.hp,g.player.maxHp);
+ g.state='lost';g.regenClock=2.99;g.player.hp=0;g.update(.05);assert.equal(g.player.hp,0);
+});
+test('legacy saves start regeneration at zero and invalid timers cannot resume',()=>{
+ const p=defaultProfile(),g=new Game(p,{seed:1}),snapshot=g.snapshot();delete snapshot.regenClock;assert.equal(Game.restore(p,snapshot).regenClock,0);
+ for(const value of [-1,3,Infinity,null]){snapshot.regenClock=value;assert.equal(Game.restore(p,snapshot),null);}
+});
