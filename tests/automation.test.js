@@ -24,3 +24,8 @@ test('automatic dodge escapes an imminent telegraph and obeys cooldown',()=>{
 test('every hero can finish a simulated run using movement and automation only',()=>{
  for(const hero of ['knight','mage','ranger']){const p=defaultProfile();p.selectedHero=hero;const g=new Game(p,{rng:seededRandom(1)});for(let i=0;i<3100&&['playing','choosing'].includes(g.state);i++){resolveChoices(g);const boss=g.enemies.find(e=>e.type==='boss');let input={x:Math.cos(i*.06),y:Math.sin(i*.06)};if(boss){const dx=boss.x-g.player.x,dy=boss.y-g.player.y,d=Math.hypot(dx,dy)||1,range=hero==='knight'?65:170;input=d>range+10?{x:dx/d,y:dy/d}:d<range-10?{x:-dx/d,y:-dy/d}:{x:-dy/d,y:dx/d};}automateAbilities(g,input);g.update(.05,input);}assert.ok(['won','lost'].includes(g.state));assert.ok(g.decisionLog.length>0);assert.equal(g.pendingLevels,0);}
 });
+test('tied choices use user priority before stable content ID',()=>{
+ const g=make();g.choices=['fire','power'];g.automation.priority={power:1,fire:0};
+ const rank=rankChoices(g);assert.equal(rank[0].score,rank[1].score);assert.equal(rank[0].id,'power');
+ g.choices.reverse();assert.equal(rankChoices(g)[0].id,'power');
+});

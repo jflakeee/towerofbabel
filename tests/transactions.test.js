@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {defaultProfile,loadProfile,allItems,organizeInventory,Game,grantRewards} from '../src/engine.js';
-import {settleRun,autoEquip,restoreEquipment,buyUpgrade,resetUpgrades,upgradeRefund,sellItem,undoSale} from '../src/transactions.js';
+import {editProfile,settleRun,autoEquip,restoreEquipment,buyUpgrade,resetUpgrades,upgradeRefund,sellItem,undoSale} from '../src/transactions.js';
 const item=(id,value=10,slot='weapon')=>({id,name:id,slot,value,rarity:2,floor:1});
 test('v1 migration preserves every valid item, equipment, gold and saved run',()=>{
  const old={...defaultProfile(),version:1,gold:50,inventory:Array.from({length:130},(_,i)=>item(String(i))),equipped:{weapon:'0',armor:null,charm:null},run:new Game(defaultProfile()).snapshot()};const p=loadProfile(old);assert.equal(p.version,2);assert.equal(allItems(p).length,130);assert.equal(p.inventory.length,100);assert.equal(p.overflow.length,30);assert.equal(p.equipped.weapon,'0');assert.equal(p.gold,50);assert.ok(Game.restore(p,p.run));assert.equal(allItems(loadProfile(JSON.parse(JSON.stringify(p)))).length,130);
@@ -38,4 +38,16 @@ test('guardian clear automatically equips upgrades even with defeat auto-equip d
 });
 test('defeat still respects the optional auto-equip setting',()=>{
  const p=defaultProfile();p.settings.autoEquip=false;const g=new Game(p);g.state='lost';g.loot=[item('drop',100)];settleRun(p,g,()=>{});assert.equal(p.equipped.weapon,null);
+});
+test('settlement records equipment changes and diagnostics atomically through reload',()=>{
+ const p=defaultProfile(),g=new Game(p);g.state='won';g.loot=[item('reward',100)];g.performance={frames:60,fps:60};
+ assert.equal(settleRun(p,g,()=>{}).ok,true);const r=loadProfile(p).history.at(-1);
+ assert.equal(r.equipment.find(e=>e.slot==='weapon').after,'reward');assert.equal(r.equipment.find(e=>e.slot==='weapon').reason,'추천 점수 개선');assert.equal(r.performance.fps,60);
+});
+
+test('free customization also commits only after storage succeeds',()=>{
+ const p=defaultProfile(),before=JSON.stringify(p);
+ const edit=d=>{d.settings.strategy='attack';d.automation.priority.fire=10;d.equipped.weapon='new';};
+ assert.equal(editProfile(p,edit,()=>{throw Error('quota');}).ok,false);assert.equal(JSON.stringify(p),before);
+ assert.equal(editProfile(p,edit,()=>{}).ok,true);assert.equal(p.settings.strategy,'attack');assert.equal(p.automation.priority.fire,10);
 });

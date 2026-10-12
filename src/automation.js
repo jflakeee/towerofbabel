@@ -14,14 +14,14 @@ export function rankChoices(game){
   if(id==='magnet'&&game.bossSpawned)score-=8;
   if(id==='orbit'&&game.hero==='knight')score+=3;
   const type=['vitality','ice','guardian'].includes(id)?'survival':id==='magnet'?'growth':'damage';score*=a.weights[type];score+=(game.skills[id]||0)*.4+(a.priority[id]||0)*3;if(a.priority[id])reason='사용자 우선순위 반영';if(['fire','ice','lightning'].includes(id))score+=(game.gearStats?.[id]||0)*.2;if(fallback)reason='제외 목록으로 후보 없음 · 유효 후보 대체';
-  return {id,score,reason};
- }).sort((a,b)=>b.score-a.score||a.id.localeCompare(b.id));
+  return {id,score,reason,priority:a.priority[id]||0,synergy:(game.skills[id]||0)+(game.gearStats?.[id]||0)};
+ }).sort((a,b)=>b.score-a.score||b.priority-a.priority||b.synergy-a.synergy||a.id.localeCompare(b.id));
 }
 export function resolveChoices(game){
  const selected=[];while(game.state==='choosing'){
   const ranking=rankChoices(game),best=ranking[0];if(!best)break;
   if(!game.choose(best.id))break;
-  const entry={id:best.id,level:game.level,time:game.time,reason:best.reason,policyVersion:1,candidates:ranking.map(({id,score})=>({id,score}))};
+  const entry={id:best.id,level:game.level,time:game.time,reason:best.reason,policyVersion:2,candidates:ranking.map(({id,score})=>({id,score}))};
   game.decisionLog||=[];game.decisionLog.push(entry);game.decisionLog=game.decisionLog.slice(-200);selected.push(entry);
  }return selected;
 }
