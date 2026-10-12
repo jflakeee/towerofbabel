@@ -1,7 +1,7 @@
 const BUILD_TIME='__BUILD_TIME__';
 const buildLabel=BUILD_TIME.startsWith('__')?'개발 실행 · 빌드 전':new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(BUILD_TIME))+' KST';
 import {Game,FLOORS,BOSS_PATTERNS,HEROES,SKILLS,UPGRADES,SLOT_NAMES,RARITIES,defaultProfile,loadProfile,equippedStats,costFor,clamp,allItems,organizeInventory} from './engine.js';
-import {editProfile,upgradeRefund,resetUpgrades,buyUpgrade,sellItem,undoSale,autoEquip,restoreEquipment,optionQuote,changeOptions,savePreset,applyPreset,prepareRun,socketGem,alchemy,enhanceItem,resetItemEnhancement,settleRun,settledRunBackup} from './transactions.js';
+import {editProfile,upgradeRefund,resetUpgrades,buyUpgrade,sellItem,undoSale,autoEquip,restoreEquipment,optionQuote,changeOptions,savePreset,applyPreset,prepareRun,advanceStage,socketGem,alchemy,enhanceItem,resetItemEnhancement,settleRun,settledRunBackup} from './transactions.js';
 import {OPTION_DEFS,normalizeItem,normalizeAutomation,optionText,GEM_DEFS,gemKey,LEGENDARY_EFFECTS} from './content.js';
 import {DIFFICULTIES,normalizeJourney,gameObstacles} from './world.js';
 import {CombatDiagnostics} from './diagnostics.js';
@@ -132,6 +132,7 @@ function refreshDirection(){
 function resetInput(){const id=joystick.pointerId;joystick.reset();refreshDirection();if(id!==null&&$('battle').hasPointerCapture?.(id))$('battle').releasePointerCapture(id);}
 function applyControls(){document.documentElement.style.setProperty('--pad-size',`${profile.settings.padSize}px`);document.body.classList.toggle('large-text',profile.settings.textSize==='large');document.querySelector('.controls').style.justifyContent=profile.settings.leftHanded?'flex-end':'flex-start';const abilities=document.querySelector('.auto-abilities');abilities.style.left=profile.settings.leftHanded?'24px':'auto';abilities.style.right=profile.settings.leftHanded?'auto':'24px';}
 $('battle').addEventListener('pointerdown',e=>{
+ if(e.target?.closest?.('#battle-results'))return;
  if(!game||!['playing','choosing'].includes(game.state)||(e.pointerType==='mouse'&&e.button!==0)||document.hidden||$('battle').hidden||!$('overlay').hidden)return;
  if(!storageAvailable&&!save())return;
  const previousPointer=joystick.pointerId;
@@ -155,11 +156,30 @@ function showChoices(){const decisions=resolveChoices(game);if(decisions.length)
 function showResultPage(html){modalKind='result';resetInput();$('battle').hidden=true;$('home').hidden=true;$('result-page').hidden=false;$('result-page').innerHTML=html;document.body.style.overflow='';}
 function finishGame(){
  game.performance=diagnostics.summary();
- const won=game.state==='won',settled=settleRun(profile,game,persistTransaction);if(!settled.ok){showResultPage(`<h2 id="dialog-title">보상 저장 대기</h2><p>${esc(settled.error)}<br>현재 전투 결과는 메모리에 보관 중입니다. 저장에 성공할 때까지 이 화면을 유지하세요.</p><button id="retry-reward" class="primary">보상 저장 다시 시도</button><button id="export-pending" class="secondary">미정산 결과 백업 내보내기</button>`);$('retry-reward').onclick=finishGame;$('export-pending').onclick=()=>{const backup=settledRunBackup(profile,game);if(backup.ok)exportSave(backup.profile,'babel-pending-reward.json');else toast(backup.error);};return;}renderHome();sound(won?'win':'hit');
- showResultPage(`<span class="section-kicker">${won?'FLOOR CONQUERED':'THE TOWER REMEMBERS'}</span><h2 id="dialog-title" class="game-over-title">${won?'탑이 당신을 인정합니다.':'성장은, 사라지지 않습니다.'}</h2><p>${DIFFICULTIES[game.difficulty].name} · ${game.mode==='chaos'?'혼돈 '+game.depth+'단계 · ':''}${game.floor}층 · ${FLOORS[game.floor-1].name} ${won?'정복':'도전 종료'}${won&&game.floor===5&&game.mode==='tower'?' · 난이도·혼돈 해금 상태를 로비에서 확인하세요':''}</p><div class="stats-grid"><div><span>처치한 적</span><strong>${game.kills}</strong></div><div><span>획득 파편</span><strong>+${game.gold+(won?60*game.floor:15)}</strong></div><div><span>도달 레벨</span><strong>${game.level}</strong></div><div><span>생존 시간</span><strong>${formatTime(game.time)}</strong></div></div><div class="build-list"><strong>자동 선택 기록</strong>${decisionHistory(game.decisionLog)||'<p>축복 선택 없음</p>'}</div><div class="build-list"><strong>장비 자동 장착</strong>${equipmentHistory(profile.history.find(r=>r.id===game.runId)?.equipment)}<p>추천 장비 비교 완료 · 더 좋은 장비 자동 장착 · 잠근 부위 유지</p><p id="result-equipped">${Object.keys(SLOT_NAMES).map(slot=>`${SLOT_NAMES[slot]}: ${esc(allItems(profile).find(i=>i.id===profile.equipped[slot])?.name||'없음')}`).join(' · ')}</p></div><div class="build-list"><strong>획득 재료</strong><p>${game.materialLoot.map(g=>gemLabel(g)).join(' · ')||'없음'}</p></div>${game.loot.map(i=>{const old=allItems(profile).find(g=>g.id===profile.equipped[i.slot]);return `<div class="item-row"><span class="rarity-${i.rarity}">${svg(i.slot==='weapon'?'sword':i.slot==='armor'?'shield':'gem')}</span><div><strong class="rarity-${i.rarity}">${esc(i.name)}</strong><p>${itemText(i)} · 현재 ${old?.value||0} → ${i.value}</p></div><button data-result-equip="${esc(i.id)}" ${old?.id===i.id?'disabled':''}>${old?.id===i.id?'장착 중':'장착'}</button></div>`;}).join('')}<button class="primary" id="result-home">보상 확인 · 로비로 ${svg('arrow')}</button>${won&&game.floor<5&&game.mode==='tower'?'<button class="secondary" id="next-floor">다음 층 도전하기</button>':''}`);
- $('result-page').querySelectorAll('[data-result-equip]').forEach(b=>b.onclick=()=>{const i=allItems(profile).find(i=>i.id===b.dataset.resultEquip);if(i){if(!applyProfileEdit(p=>{p.equipped[i.slot]=i.id;}))return;$('result-page').querySelectorAll('[data-result-equip]').forEach(button=>{const item=allItems(profile).find(i=>i.id===button.dataset.resultEquip);const equipped=item&&profile.equipped[item.slot]===item.id;button.textContent=equipped?'장착 중':'장착';button.disabled=!!equipped;});$('result-equipped').textContent=Object.keys(SLOT_NAMES).map(slot=>`${SLOT_NAMES[slot]}: ${allItems(profile).find(i=>i.id===profile.equipped[slot])?.name||'없음'}`).join(' · ');toast('다음 전투부터 장비 효과가 적용됩니다.');}});
- $('result-home').onclick=goHome;if($('next-floor'))$('next-floor').onclick=()=>startGame(false,Math.min(5,game.floor+1));
+ const won=game.state==='won',settled=won?advanceStage(profile,game,persistTransaction):settleRun(profile,game,persistTransaction);
+ if(!settled.ok){showResultPage(`<h2 id="dialog-title">보상 저장 대기</h2><p>${esc(settled.error)}<br>저장에 성공하면 계속 진행합니다.</p><button id="retry-reward" class="primary">저장 후 계속</button><button id="export-pending" class="secondary">미정산 결과 백업</button>`);$('retry-reward').onclick=finishGame;$('export-pending').onclick=()=>{const backup=settledRunBackup(profile,game);if(backup.ok)exportSave(backup.profile,'babel-pending-reward.json');};return;}
+ renderHome();sound(won?'win':'hit');
+ if(won){
+  game=settled.game;storageAvailable=true;paused=document.hidden;modalKind='';$('result-page').hidden=true;$('battle').hidden=false;document.body.style.overflow='hidden';
+  diagnostics.start({build:BUILD_TIME,width:window.innerWidth,height:window.innerHeight,quality:profile.settings.quality,resumed:false});
+  stepAccumulator=0;saveClock=0;hudClock=0;lastTime=performance.now();updateHud();
+  announce(`자동 장착 완료 · ${game.mode==='chaos'?'혼돈 '+game.depth+'단계':game.floor+'층'} 시작`);
+  $('battle-results').textContent='전투 결과 확인 · 새 결과';
+ }else showBattleResults();
 }
+function showBattleResults(){
+ if(game&&['playing','choosing'].includes(game.state)){pauseGame();if(!storageAvailable)return;}
+ const active=game&&['playing','choosing'].includes(game.state);
+ const rows=[...profile.history].reverse();
+ showResultPage(`<span class="section-kicker">BATTLE RESULTS</span><h2 id="dialog-title">전투 결과 · 자동 장착</h2><p>${active?'현재 단계는 일시정지 중입니다. 계속하면 같은 전투로 돌아갑니다.':'전투가 종료되었습니다.'}</p>${active?'<button id="result-continue" class="primary">전투 계속</button>':''}<button id="result-home" class="secondary">전투 종료 · 로비로</button><p>장비 변경은 로비에서 할 수 있습니다. 최근 20개 단계의 결과입니다.</p>${rows.map(r=>`<section class="history-row"><h3>${r.mode==='chaos'?'혼돈 '+r.depth+'단계':r.floor+'층'} · ${r.state==='won'?'정복':'종료'}</h3><p>처치 ${r.kills} · 파편 +${r.gold} · ${formatTime(r.time)}</p><div class="build-list"><strong>장비 자동 장착</strong>${equipmentHistory(r.equipment)}</div>${(r.loot||[]).map(i=>{const slot=r.equipment?.find(e=>e.slot===i.slot);return `<div class="item-row"><div><strong>${esc(i.name)}</strong><p>${itemText(i)}</p><p>${slot?.after===i.id?'자동 장착됨':slot?.reason==='잠근 부위 유지'?'보관됨 · 잠금으로 기존 장비 유지':'보관됨 · 더 높은 추천 점수의 장비 유지'}</p></div></div>`;}).join('')}<details><summary>자동 선택 기록</summary>${decisionHistory(r.decisions)}</details></section>`).join('')||'<p>아직 완료한 단계가 없습니다.</p>'}`);
+ $('battle-results').textContent='전투 결과 확인';
+ if(active)$('result-continue').onclick=()=>{modalKind='';$('result-page').hidden=true;$('battle').hidden=false;document.body.style.overflow='hidden';paused=document.hidden;lastTime=performance.now();stepAccumulator=0;};
+ $('result-home').onclick=()=>{
+  if(active){const snapshot=game.snapshot();snapshot.state='lost';snapshot.performance=diagnostics.summary();const copy={state:'lost',runId:game.runId,snapshot:()=>snapshot};const result=settleRun(profile,copy,persistTransaction);if(!result.ok){toast(result.error);return;}game.state='lost';game.rewarded=true;}
+  goHome();
+ };
+}
+$('battle-results').onclick=showBattleResults;
 function announce(message){$('announcement').textContent=message;$('announcement').classList.add('show');clearTimeout(announcementTimer);announcementTimer=setTimeout(()=>$('announcement').classList.remove('show'),2200);}
 function formatTime(seconds){return `${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(Math.floor(seconds%60)).padStart(2,'0')}`;}
 function updateHud(){

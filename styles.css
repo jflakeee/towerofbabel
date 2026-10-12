@@ -36,3 +36,5 @@
 /* A single viewport-sized hit area covers both sides, above all combat HUD. */
 .movement-surface{position:absolute;inset:0;z-index:3;touch-action:none;pointer-events:auto;-webkit-touch-callout:none;user-select:none;-webkit-user-select:none}
 .battle .joystick{z-index:4}
+
+.battle-results{position:absolute;top:max(8px,env(safe-area-inset-top));right:12px;z-index:6;pointer-events:auto;min-height:44px;padding:8px 12px;background:#1c292b;color:var(--gold);border:1px solid var(--line);border-radius:8px;font-size:12px}.battle-hud{padding-top:58px}
