@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {defaultProfile,loadProfile,allItems,organizeInventory,Game,grantRewards} from '../src/engine.js';
-import {editProfile,settleRun,autoEquip,restoreEquipment,buyUpgrade,resetUpgrades,upgradeRefund,sellItem,undoSale} from '../src/transactions.js';
+import {settledRunBackup,editProfile,settleRun,autoEquip,restoreEquipment,buyUpgrade,resetUpgrades,upgradeRefund,sellItem,undoSale} from '../src/transactions.js';
 const item=(id,value=10,slot='weapon')=>({id,name:id,slot,value,rarity:2,floor:1});
 test('v1 migration preserves every valid item, equipment, gold and saved run',()=>{
  const old={...defaultProfile(),version:1,gold:50,inventory:Array.from({length:130},(_,i)=>item(String(i))),equipped:{weapon:'0',armor:null,charm:null},run:new Game(defaultProfile()).snapshot()};const p=loadProfile(old);assert.equal(p.version,2);assert.equal(allItems(p).length,130);assert.equal(p.inventory.length,100);assert.equal(p.overflow.length,30);assert.equal(p.equipped.weapon,'0');assert.equal(p.gold,50);assert.ok(Game.restore(p,p.run));assert.equal(allItems(loadProfile(JSON.parse(JSON.stringify(p)))).length,130);
@@ -50,4 +50,15 @@ test('free customization also commits only after storage succeeds',()=>{
  const edit=d=>{d.settings.strategy='attack';d.automation.priority.fire=10;d.equipped.weapon='new';};
  assert.equal(editProfile(p,edit,()=>{throw Error('quota');}).ok,false);assert.equal(JSON.stringify(p),before);
  assert.equal(editProfile(p,edit,()=>{}).ok,true);assert.equal(p.settings.strategy,'attack');assert.equal(p.automation.priority.fire,10);
+});
+
+test('pending reward backup includes auto-equipment and replay protection without mutating live state',()=>{
+ const p=defaultProfile(),g=new Game(p);g.state='won';g.loot=[item('new-reward',100)];g.gold=50;
+ const before=JSON.stringify(p),runBefore=JSON.stringify(g.snapshot());const backup=settledRunBackup(p,g);
+ assert.equal(backup.ok,true);assert.equal(JSON.stringify(p),before);assert.equal(JSON.stringify(g.snapshot()),runBefore);
+ const recovered=loadProfile(backup.profile);assert.equal(recovered.equipped.weapon,'new-reward');assert.equal(recovered.history.length,1);assert.equal(recovered.run,null);
+ const gold=recovered.gold;assert.equal(settleRun(recovered,g,()=>{}).replayed,true);assert.equal(recovered.gold,gold);assert.equal(recovered.inventory.length,1);
+});
+test('recovery export rejects an unfinished run without awarding anything',()=>{
+ const p=defaultProfile(),g=new Game(p),before=JSON.stringify(p);assert.equal(settledRunBackup(p,g).ok,false);assert.equal(JSON.stringify(p),before);assert.equal(g.rewarded,false);
 });

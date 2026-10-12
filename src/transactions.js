@@ -61,3 +61,9 @@ export function prepareRun(profile,{resume=false,floor=profile.selectedFloor,id}
   const game=new Game(p);p.run=game.snapshot();return {ok:true,game};
  },persist);
 }
+
+// Build a fully settled recovery file without changing the live run or profile.
+export function settledRunBackup(profile,run){
+ const draft=structuredClone(profile),copy={state:run.state,runId:run.runId,rewarded:run.rewarded,snapshot:()=>run.snapshot()};
+ const result=settleRun(draft,copy,()=>{});return result.ok?{ok:true,profile:draft}:result;
+}
