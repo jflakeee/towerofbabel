@@ -84,3 +84,13 @@ export function advanceStage(profile,run,persist){
  },persist);
  if(result.ok)run.rewarded=true;return result;
 }
+
+// Recovery mirrors continuous victory without mutating the live game or its RNG.
+export function continuousRunBackup(profile,run){
+ if(run.state!=='won')return settledRunBackup(profile,run);
+ const draft=structuredClone(profile),copy=Game.restore(draft,{...run.snapshot(),state:'playing'});
+ if(!copy)return {ok:false,error:'전투 상태를 백업하지 못했습니다. 저장을 다시 시도하세요.'};
+ copy.state='won';if(run.performance)copy.performance=structuredClone(run.performance);
+ const result=advanceStage(draft,copy,()=>{});
+ return result.ok?{ok:true,profile:draft}:result;
+}

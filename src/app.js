@@ -1,7 +1,7 @@
 const BUILD_TIME='__BUILD_TIME__';
 const buildLabel=BUILD_TIME.startsWith('__')?'개발 실행 · 빌드 전':new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(BUILD_TIME))+' KST';
 import {Game,FLOORS,BOSS_PATTERNS,HEROES,SKILLS,UPGRADES,SLOT_NAMES,RARITIES,defaultProfile,loadProfile,equippedStats,costFor,clamp,allItems,organizeInventory} from './engine.js';
-import {editProfile,upgradeRefund,resetUpgrades,buyUpgrade,sellItem,undoSale,autoEquip,restoreEquipment,optionQuote,changeOptions,savePreset,applyPreset,prepareRun,advanceStage,socketGem,alchemy,enhanceItem,resetItemEnhancement,settleRun,settledRunBackup} from './transactions.js';
+import {editProfile,upgradeRefund,resetUpgrades,buyUpgrade,sellItem,undoSale,autoEquip,restoreEquipment,optionQuote,changeOptions,savePreset,applyPreset,prepareRun,advanceStage,socketGem,alchemy,enhanceItem,resetItemEnhancement,settleRun,continuousRunBackup} from './transactions.js';
 import {OPTION_DEFS,normalizeItem,normalizeAutomation,optionText,GEM_DEFS,gemKey,LEGENDARY_EFFECTS} from './content.js';
 import {DIFFICULTIES,normalizeJourney,gameObstacles} from './world.js';
 import {CombatDiagnostics} from './diagnostics.js';
@@ -157,7 +157,7 @@ function showResultPage(html){modalKind='result';resetInput();$('battle').hidden
 function finishGame(){
  game.performance=diagnostics.summary();
  const won=game.state==='won',settled=won?advanceStage(profile,game,persistTransaction):settleRun(profile,game,persistTransaction);
- if(!settled.ok){showResultPage(`<h2 id="dialog-title">보상 저장 대기</h2><p>${esc(settled.error)}<br>저장에 성공하면 계속 진행합니다.</p><button id="retry-reward" class="primary">저장 후 계속</button><button id="export-pending" class="secondary">미정산 결과 백업</button>`);$('retry-reward').onclick=finishGame;$('export-pending').onclick=()=>{const backup=settledRunBackup(profile,game);if(backup.ok)exportSave(backup.profile,'babel-pending-reward.json');};return;}
+ if(!settled.ok){showResultPage(`<h2 id="dialog-title">보상 저장 대기</h2><p>${esc(settled.error)}<br>저장에 성공하면 계속 진행합니다.</p><button id="retry-reward" class="primary">저장 후 계속</button><button id="export-pending" class="secondary">미정산 결과 백업</button>`);$('retry-reward').onclick=finishGame;$('export-pending').onclick=()=>{const backup=continuousRunBackup(profile,game);if(backup.ok)exportSave(backup.profile,'babel-pending-reward.json');else toast(backup.error);};return;}
  renderHome();sound(won?'win':'hit');
  if(won){
   game=settled.game;storageAvailable=true;paused=document.hidden;modalKind='';$('result-page').hidden=true;$('battle').hidden=false;document.body.style.overflow='hidden';

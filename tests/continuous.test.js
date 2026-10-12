@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Game,defaultProfile} from '../src/engine.js';
-import {advanceStage} from '../src/transactions.js';
+import {advanceStage,continuousRunBackup} from '../src/transactions.js';
 const winner=(p,floor=1)=>{p.unlocked=5;const g=new Game(p,{floor,seed:1});g.state='won';g.gold=30;g.loot=[{id:'reward',name:'보상',slot:'weapon',value:999,rarity:2,floor}];p.run=g.snapshot();return g;};
 test('stage transition settles, equips and saves the next stage once without spending upgrade budget',()=>{
  const p=defaultProfile();p.gold=500;p.automation.upgradeBudget=100;const g=winner(p);let writes=0;
@@ -44,4 +44,24 @@ test('new equipment keeps enhancements and sockets while retained vitality appli
  const before=g.player.maxHp,r=advanceStage(p,g,()=>{});assert.equal(r.ok,true);g=r.game;
  assert.equal(g.appearance.armor.enhancement,2);assert.deepEqual(g.appearance.armor.sockets[0],{kind:'emerald',tier:2});assert.equal(g.player.maxHp,before-10+164);assert.equal(g.player.hp,80);assert.equal(g.skills.vitality,2);
  const hp=g.player.maxHp;g.state='won';p.run=g.snapshot();const next=advanceStage(p,g,()=>{});assert.equal(next.game.player.maxHp,hp);assert.equal(p.inventory.filter(i=>i.id==='new-armor').length,1);
+});
+
+
+test('victory recovery backup keeps next stage and build without mutating the live run',()=>{
+ const p=defaultProfile(),g=winner(p);g.skills={vitality:2,fire:3};g.player.maxHp+=50;g.player.hp=61;g.level=8;g.xp=11;g.nextXp=55;g.novaCd=6;g.performance={frames:120,interruptions:1};
+ const before=JSON.stringify(p),runBefore=JSON.stringify(g.snapshot());
+ assert.equal(advanceStage(p,g,()=>{throw Error('quota');}).ok,false);
+ const backup=continuousRunBackup(p,g);assert.equal(backup.ok,true);assert.equal(JSON.stringify(p),before);assert.equal(JSON.stringify(g.snapshot()),runBefore);
+ const restored=Game.restore(backup.profile,backup.profile.run);assert.ok(restored);assert.equal(restored.floor,2);assert.deepEqual(restored.skills,g.skills);assert.equal(restored.level,8);assert.equal(restored.xp,11);assert.equal(restored.player.hp,61);assert.equal(restored.novaCd,6);assert.equal(restored.appearance.weapon.id,'reward');
+ assert.equal(backup.profile.history.length,1);assert.deepEqual(backup.profile.history[0].performance,g.performance);const gold=backup.profile.gold,id=restored.runId;
+ const replay=advanceStage(backup.profile,g,()=>{});assert.equal(replay.game.runId,id);assert.equal(backup.profile.gold,gold);assert.equal(backup.profile.history.length,1);
+});
+test('recovery of a final tower victory continues into chaos, while defeat stays settled',()=>{
+ for(const state of ['won','lost']){
+  const p=defaultProfile(),g=winner(p,5);g.state=state;g.skills.fire=2;
+  const backup=continuousRunBackup(p,g);assert.equal(backup.ok,true);assert.equal(g.rewarded,false);
+  if(state==='won'){const restored=Game.restore(backup.profile,backup.profile.run);assert.equal(restored.mode,'chaos');assert.equal(restored.depth,1);assert.equal(restored.skills.fire,2);}
+  else assert.equal(backup.profile.run,null);
+ }
+ const p=defaultProfile(),g=new Game(p);assert.equal(continuousRunBackup(p,g).ok,false);
 });
