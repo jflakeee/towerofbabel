@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {defaultProfile,loadProfile,Game} from '../src/engine.js';
 import {prepareRun,advanceStage} from '../src/transactions.js';
+import {resolveChoices} from '../src/automation.js';
+import {isWalkable} from '../src/world.js';
 test('run creation and automatic upgrades use one successful save and apply the resulting stats',()=>{
  const p=defaultProfile();p.gold=500;p.automation.upgradeBudget=200;p.automation.reserve=400;let writes=0,saved;
  const result=prepareRun(p,{id:'start'},draft=>{writes++;saved=structuredClone(draft);});
@@ -48,4 +50,26 @@ test('failed starter save preserves the profile and retry grants only one skill'
  const p=defaultProfile();p.unlocked=4;const before=JSON.stringify(p);
  assert.equal(prepareRun(p,{id:'starter'},()=>{throw Error('quota');}).ok,false);assert.equal(JSON.stringify(p),before);
  const r=prepareRun(p,{id:'starter'},()=>{});assert.equal(Object.values(r.game.skills).reduce((a,b)=>a+b,0),1);assert.equal(r.game.decisionLog.length,1);
+});
+
+
+test('new-run experience points are visible, reachable and level up every hero without manual selection',()=>{
+ for(const hero of ['knight','mage','ranger'])for(let floor=1;floor<=5;floor++){
+  const p=defaultProfile();p.selectedHero=hero;p.unlocked=5;const g=prepareRun(p,{floor,id:'points'},()=>{}).game;
+  assert.equal(g.gems.length,8);assert.equal(g.xp,0);assert.equal(g.level,1);
+  for(const gem of g.gems){assert.equal(gem.value,1);assert.ok(isWalkable(g,gem.x,gem.y,3));}
+  g.spawnClock=g.attackClock=100;for(let i=0;i<20;i++){resolveChoices(g);g.update(.05);}resolveChoices(g);
+  assert.equal(g.gems.length,0);assert.equal(g.level,2);assert.equal(g.xp,0);assert.equal(g.state,'playing');assert.equal(g.pendingLevels,0);
+ }
+});
+test('partially collected starting points survive resume without duplication and do not respawn next stage',()=>{
+ const p=defaultProfile(),g=prepareRun(p,{id:'points'},()=>{}).game;g.spawnClock=g.attackClock=100;
+ g.gems[0].x=g.player.x;g.gems[0].y=g.player.y;g.update(.01);assert.equal(g.xp,1);assert.equal(g.gems.length,7);p.run=g.snapshot();
+ const resumed=prepareRun(p,{resume:true},()=>{}).game;assert.equal(resumed.xp,1);assert.equal(resumed.gems.length,7);
+ for(let i=0;i<20;i++){resolveChoices(resumed);resumed.update(.05);}resolveChoices(resumed);assert.equal(resumed.level,2);assert.equal(resumed.xp,0);
+ resumed.state='won';const next=advanceStage(p,resumed,()=>{}).game;assert.equal(next.level,2);assert.equal(next.gems.length,0);
+});
+test('failed run start cannot accumulate starting experience points',()=>{
+ const p=defaultProfile(),before=JSON.stringify(p);assert.equal(prepareRun(p,{id:'points'},()=>{throw Error('quota');}).ok,false);assert.equal(JSON.stringify(p),before);
+ const g=prepareRun(p,{id:'points'},()=>{}).game;assert.equal(g.gems.reduce((n,gem)=>n+gem.value,0),8);
 });

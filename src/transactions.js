@@ -59,7 +59,10 @@ export function prepareRun(profile,{resume=false,floor=profile.selectedFloor,id}
   if(!Number.isInteger(floor)||floor<1||floor>p.unlocked)return {ok:false,error:'아직 도전할 수 없는 층입니다.'};
   p.selectedFloor=floor;
   if(p.automation.upgradeBudget>0){if(typeof id!=='string'||!id)return {ok:false,error:'도전 준비 식별자가 없습니다.'};const upgraded=autoUpgrade(p,id,()=>{});if(!upgraded.ok)return upgraded;}
-  const game=new Game(p);if(p.unlocked>=4)grantStartingSkill(game);p.run=game.snapshot();return {ok:true,game};
+  const game=new Game(p);if(p.unlocked>=4)grantStartingSkill(game);
+  // Independent mobile tuning: eight visible points fund the first level-up.
+  game.gems=Array.from({length:8},(_,i)=>{const angle=i*Math.PI/4;return {x:game.player.x+Math.cos(angle)*80,y:game.player.y+Math.sin(angle)*80,value:1};});
+  p.run=game.snapshot();return {ok:true,game};
  },persist);
 }
 
