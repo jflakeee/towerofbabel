@@ -1,5 +1,6 @@
 # Tower of Babel 모바일 벤치마크 리서치와 구현 설계
 
+> 현재 규칙과 미완료 조건: [현재 설계 기준](current-design.md). 아래 날짜별 내용은 변경 이력을 포함합니다.
 조사일: 2026-10-11 / 대상 저장소: jflakeee/towerofbabel
 
 ## 조사 범위와 신뢰도
