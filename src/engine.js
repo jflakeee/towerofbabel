@@ -161,6 +161,8 @@ export class Game {
   const enemy={id:++this.id,x,y,r:boss?35:elite?24:type==='runner'?12:16,hp,maxHp:hp,type,speed:boss?48:elite?62:type==='runner'?102: type==='caster'?46:60,damage:boss?18+f*3:elite?10+f:4+f*2,slow:0,hit:0,cooldown:boss?2.5:2+this.rng()*2,telegraph:0,targetX:0,targetY:0};
   enemy.hp*=difficulty.hp*scale;enemy.maxHp=enemy.hp;enemy.damage*=difficulty.damage*scale;enemy.speed*=difficulty.speed;Object.assign(enemy,safeSpawn(this,x,y,enemy.r));this.enemies.push(enemy);if(boss){this.bossId=enemy.id;this.bossSpawned=true;this.event='boss';}return enemy;
  }
+ livingBosses(){return this.enemies.filter(e=>e.type==='boss'&&e.hp>0);}
+ currentBoss(){const bosses=this.livingBosses();return bosses.find(e=>e.id===this.bossId)||bosses[0]||null;}
  rollLoot(rare=false){const item=makeLoot(this.floor+DIFFICULTIES[this.difficulty].loot+(this.mode==='chaos'?Math.floor(this.depth/4):0),this.lootRng,rare);item.id=`${this.runId}-loot-${++this.lootCount}`;return item;}
  nearest(range=Infinity){let nearest=null,d=range;for(const e of this.enemies)if(e.hp>0&&distance(e,this.player)<d&&clearLine(this,this.player,e)){d=distance(e,this.player);nearest=e;}return nearest;}
  combatTarget(range){const candidates=this.enemies.filter(e=>e.hp>0&&distance(e,this.player)<range&&clearLine(this,this.player,e));const score=e=>distance(e,this.player)-(e.telegraph>0?60:0)-(e.type==='caster'?30:0);candidates.sort((a,b)=>score(a)-score(b)||a.id-b.id);const best=candidates[0],current=candidates.find(e=>e.id===this.targetId);const target=current&&best&&score(current)<=score(best)+25?current:best;this.targetId=target?.id||null;return target||null;}
@@ -171,7 +173,7 @@ export class Game {
   if(this.texts.length<35)this.texts.push({x:e.x,y:e.y-18,text:String(Math.round(dmg)),color:crit?'#e8c67d':'#c8d4c7',life:.6,maxLife:.6});
   if(e.hp<=0){this.kills++;if(this.kills%15===0&&this.player.hp>0){this.player.hp=Math.min(this.player.maxHp,this.player.hp+12);this.addEffect('ring',this.player.x,this.player.y,40,'#86b9aa',.4);}this.gold+=Math.round((e.type==='boss'?25:e.type==='elite'?10:1)*this.fortune*DIFFICULTIES[this.difficulty].reward*(this.mode==='chaos'?1+this.depth*.05:1));this.gems.push({x:e.x,y:e.y,value:e.type==='elite'?6:1});
    if(e.type==='elite'){this.loot.push(this.rollLoot());this.rollMaterial();}
-   if(e.type==='boss'){this.rollMaterial(true);this.loot.push(this.rollLoot(true));if(this.player.hp>0&&this.state==='playing'){this.state='won';this.event='won';}}
+   if(e.type==='boss'){this.rollMaterial(true);this.loot.push(this.rollLoot(true));this.bossId=this.currentBoss()?.id||null;if(!this.livingBosses().length&&this.player.hp>0&&this.state==='playing'){this.state='won';this.event='won';}}
    this.addEffect('death',e.x,e.y,e.r,'#8ea899',.35);
   }
  }
