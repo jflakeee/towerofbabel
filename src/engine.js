@@ -114,7 +114,10 @@ export class Game {
   this.regenClock=0;this.spawnClock=0;this.attackClock=.2;this.skillClocks={fire:1,ice:2,lightning:1,orbit:.4,meteor:2};this.dashCd=0;this.novaCd=0;this.dashTime=0;this.dashDir={x:1,y:0};this.pendingLevels=0;this.rerolls=1;this.bossSpawned=false;this.bossId=null;this.id=0;this.rewarded=false;this.event=null;this.damageFlash=0;
  }
  static continueStage(profile,previous){
-  const game=new Game(profile,{hero:previous.hero});
+  // Lobby edits apply to a fresh journey, never to the next stage of a saved run.
+  const mode=previous.mode==='chaos'||previous.floor===5?'chaos':'tower';
+  const journey={...profile.journey,mode,difficulty:previous.difficulty,chaosDepth:previous.mode==='chaos'?Math.min(20,previous.depth+1):1};
+  const game=new Game({...profile,journey},{hero:previous.hero,floor:Math.min(5,previous.floor+1)});
   for(const key of ['regenClock','skills','level','xp','nextXp','pendingLevels','rerolls','automation','autoStrategy','attackClock','skillClocks','dashCd','novaCd','dashTime','dashDir'])game[key]=structuredClone(previous[key]);
   // Apply only the equipment difference; do not replay healing or level-up effects.
   const oldGear=previous.gearStats,newGear=game.gearStats;
