@@ -1,6 +1,6 @@
 import {grantStartingSkill} from './automation.js';
 import {normalizeItem,rollOption,OPTION_DEFS,itemStats,normalizeAutomation,normalizeGem,gemKey} from './content.js';
-import {Game,UPGRADES,SLOT_NAMES,costFor,allItems,organizeInventory,seededRandom,grantRewards} from './engine.js';
+import {Game,UPGRADES,SLOT_NAMES,costFor,allItems,organizeInventory,seededRandom,grantRewards,recordedSkills} from './engine.js';
 export function upgradeRefund(profile){return UPGRADES.reduce((sum,u)=>{for(let i=0;i<profile.upgrades[u.id];i++)sum+=costFor(i);return sum;},0);}
 export function transact(profile,id,operation,persist=()=>{}){
  if(profile.appliedTransactionIds?.includes(id)||profile.transactions.some(t=>t.id===id))return {ok:true,replayed:true};
@@ -97,4 +97,11 @@ export function continuousRunBackup(profile,run){
  copy.state='won';if(run.performance)copy.performance=structuredClone(run.performance);
  const result=advanceStage(draft,copy,()=>{});
  return result.ok?{ok:true,profile:draft}:result;
+}
+
+export function applyHistoryBuild(profile,historyId){
+ const record=profile.history.find(r=>r.id===historyId),skills=recordedSkills(record);
+ if(!record||!Object.keys(skills).length)return {ok:false,error:'가져올 스킬 기록이 없습니다. 현재 빌드를 유지합니다.'};
+ profile.selectedHero=record.hero;profile.automation.priority=Object.fromEntries(Object.entries(skills).map(([id,level])=>[id,Math.min(10,level*2)]));profile.automation.excluded=[];profile.settings.strategy='custom';
+ return {ok:true};
 }

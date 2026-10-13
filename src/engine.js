@@ -51,6 +51,13 @@ export const costFor = level => 60 + level * 45;
 export const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 export const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 export function seededRandom(seed=Date.now()) {let s=seed>>>0;const next=()=>{s=(Math.imul(1664525,s)+1013904223)>>>0;return s/4294967296;};next.getState=()=>s;next.setState=v=>{s=v>>>0;};return next;}
+// Full end-of-stage builds take precedence; older records fall back to known decisions.
+export function recordedSkills(record){
+ const full=record?.skills&&typeof record.skills==='object'&&!Array.isArray(record.skills),counts={};
+ if(!full)for(const d of record?.decisions||[])if(d&&typeof d.id==='string')counts[d.id]=(counts[d.id]||0)+1;
+ const source=full?record.skills:counts;
+ return Object.fromEntries(SKILLS.filter(s=>(!s.hero||s.hero===record?.hero)&&Number.isInteger(source[s.id])&&source[s.id]>0).map(s=>[s.id,Math.min(s.max,source[s.id])]));
+}
 export function defaultProfile(){return {version:2,gold:0,materials:normalizeMaterials(),journey:defaultJourney(),unlocked:1,selectedHero:'knight',selectedFloor:1,upgrades:{power:0,health:0,fortune:0},inventory:[],overflow:[],transactions:[],appliedTransactionIds:[],previousEquipment:null,automation:defaultAutomation(),presets:{knight:[null,null,null],mage:[null,null,null],ranger:[null,null,null]},history:[],rewardIds:[],lockedSlots:{weapon:false,armor:false,charm:false},equipped:{weapon:null,armor:null,charm:null},settings:{sound:false,music:true,quality:'auto',leftHanded:false,shake:true,strategy:'balanced',autoEquip:true,padSize:48,textSize:'normal',damageNumbers:true,effectOpacity:1},best:{kills:0,clears:0},run:null};}
 export function loadProfile(raw){
  const p=defaultProfile(); if(!raw||![1,2].includes(raw.version)) return p;
@@ -63,7 +70,7 @@ export function loadProfile(raw){
  p.transactions=Array.isArray(raw.transactions)?raw.transactions.filter(t=>t&&typeof t.id==='string'&&['sell','undo-sale','reset','upgrade','options','auto-upgrade','socket','alchemy','item-enhance','item-reset','reward'].includes(t.type)&&(t.type!=='sell'||(valid(t.item)&&Number.isFinite(t.payout)&&t.payout>=0))).slice(-20):[];
  p.automation=normalizeAutomation(raw.automation);
  for(const hero of Object.keys(HEROES))p.presets[hero]=Array.from({length:3},(_,i)=>{const preset=raw.presets?.[hero]?.[i];return preset&&typeof preset.name==='string'?{name:preset.name.slice(0,40),strategy:['balanced','survival','attack','farming','custom'].includes(preset.strategy)?preset.strategy:'balanced',automation:normalizeAutomation(preset.automation),equipped:Object.fromEntries(Object.keys(SLOT_NAMES).map(slot=>[slot,typeof preset.equipped?.[slot]==='string'?preset.equipped[slot]:null])),lockedSlots:Object.fromEntries(Object.keys(SLOT_NAMES).map(slot=>[slot,preset.lockedSlots?.[slot]===true]))}:null;});
- p.history=Array.isArray(raw.history)?raw.history.filter(r=>r&&typeof r.id==='string'&&HEROES[r.hero]&&['won','lost'].includes(r.state)&&['floor','time','kills','gold'].every(k=>Number.isFinite(r[k]))).slice(-20).map(r=>({...r,decisions:Array.isArray(r.decisions)?r.decisions.filter(d=>d&&SKILLS.some(s=>s.id===d.id)&&typeof d.reason==='string').slice(-200):[]})):[];p.rewardIds=Array.isArray(raw.rewardIds)?raw.rewardIds.filter(id=>typeof id==='string').slice(-100):[];
+ p.history=Array.isArray(raw.history)?raw.history.filter(r=>r&&typeof r.id==='string'&&HEROES[r.hero]&&['won','lost'].includes(r.state)&&['floor','time','kills','gold'].every(k=>Number.isFinite(r[k]))).slice(-20).map(r=>({...r,skills:r.skills&&typeof r.skills==='object'&&!Array.isArray(r.skills)?recordedSkills(r):undefined,decisions:Array.isArray(r.decisions)?r.decisions.filter(d=>d&&SKILLS.some(s=>s.id===d.id)&&typeof d.reason==='string').slice(-200):[]})):[];p.rewardIds=Array.isArray(raw.rewardIds)?raw.rewardIds.filter(id=>typeof id==='string').slice(-100):[];
  p.appliedTransactionIds=[...new Set([...(Array.isArray(raw.appliedTransactionIds)?raw.appliedTransactionIds.filter(id=>typeof id==='string'):[]),...p.transactions.map(t=>t.id)])];
  p.previousEquipment=raw.previousEquipment&&typeof raw.previousEquipment==='object'?raw.previousEquipment:null;
  for(const slot of Object.keys(SLOT_NAMES))p.lockedSlots[slot]=raw.lockedSlots?.[slot]===true;
@@ -91,7 +98,7 @@ export function grantRewards(profile,run){
  for(const gem of run.materialLoot||[]){const key=gemKey(gem);if(key in profile.materials)profile.materials[key]++;}
  profile.inventory.push(...run.loot);organizeInventory(profile);
  if(run.state==='won'){profile.unlocked=Math.max(profile.unlocked,Math.min(5,run.floor+1));profile.best.clears++;if(run.mode==='chaos'){profile.journey=normalizeJourney(profile.journey);profile.journey.chaosMaxDepth=Math.max(profile.journey.chaosMaxDepth,Math.min(20,(Math.floor((run.depth||1)/5)+1)*5));profile.journey.chaosDepth=Math.min(20,(run.depth||1)+1);}else if(run.floor===5){profile.journey.chaosUnlocked=true;profile.journey.chaosMaxDepth=Math.max(5,profile.journey.chaosMaxDepth||1);const rank=Object.keys(DIFFICULTIES).indexOf(run.difficulty||'normal');profile.journey.unlockedDifficulty=Math.min(2,Math.max(profile.journey.unlockedDifficulty,rank+1));}}
- profile.history.push({id:run.runId||`legacy-${Date.now()}`,hero:run.hero,floor:run.floor,state:run.state,time:run.time,kills:run.kills,gold:run.gold+(run.state==='won'?60*run.floor:15),difficulty:run.difficulty||'normal',mode:run.mode||'tower',depth:run.depth||1,materials:structuredClone(run.materialLoot||[]),strategy:run.autoStrategy,decisions:structuredClone(run.decisionLog||[]),createdAt:new Date().toISOString()});profile.history=profile.history.slice(-20);profile.best.kills=Math.max(profile.best.kills,run.kills);profile.run=null;return true;
+ profile.history.push({id:run.runId||`legacy-${Date.now()}`,hero:run.hero,floor:run.floor,state:run.state,time:run.time,kills:run.kills,gold:run.gold+(run.state==='won'?60*run.floor:15),difficulty:run.difficulty||'normal',mode:run.mode||'tower',depth:run.depth||1,materials:structuredClone(run.materialLoot||[]),strategy:run.autoStrategy,skills:structuredClone(run.skills||{}),decisions:structuredClone(run.decisionLog||[]),createdAt:new Date().toISOString()});profile.history=profile.history.slice(-20);profile.best.kills=Math.max(profile.best.kills,run.kills);profile.run=null;return true;
 }
 let runSequence=0;
 export class Game {
