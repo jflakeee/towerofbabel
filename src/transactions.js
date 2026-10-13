@@ -49,12 +49,12 @@ export function resetItemEnhancement(profile,itemId,id,persist,revision){return 
  const item=allItems(p).find(i=>i.id===itemId);if(!item)return {ok:false,error:'장비가 없습니다.'};const source=normalizeItem(item);if(source.revision!==revision||!source.enhancement||source.enhanceSpent<10||p.gold<10)return {ok:false,error:'재설정할 투자금 또는 수수료가 부족합니다.'};const refund=source.enhanceSpent;p.gold+=refund-10;source.enhancement=0;source.enhanceSpent=0;source.revision++;Object.assign(item,source);return {ok:true,record:{type:'item-reset',itemId,refund,fee:10}};
  },persist);}
 
-export function settleRun(profile,run,persist){if(!['won','lost'].includes(run.state))return {ok:false,error:'종료된 전투만 정산할 수 있습니다.'};const id=`reward:${run.runId}`;const result=transact(profile,id,p=>{const copy=structuredClone(run.snapshot());if(!grantRewards(p,copy))return {ok:true,record:{type:'reward',runId:run.runId,duplicate:true}};const before={...p.equipped};autoEquip(p,{settings:{strategy:copy.autoStrategy||p.settings.strategy},automation:copy.automation||p.automation});const equipment=Object.keys(SLOT_NAMES).map(slot=>({slot,before:before[slot],after:p.equipped[slot],beforeName:allItems(p).find(i=>i.id===before[slot])?.name||'없음',afterName:allItems(p).find(i=>i.id===p.equipped[slot])?.name||'없음',reason:p.lockedSlots[slot]?'잠근 부위 유지':before[slot]!==p.equipped[slot]?'추천 점수 개선':'현재 장비 유지'}));const history=p.history.find(r=>r.id===run.runId);if(history){history.equipment=equipment;history.loot=structuredClone(copy.loot||[]);history.level=copy.level;if(copy.performance)history.performance=structuredClone(copy.performance);}return {ok:true,record:{type:'reward',runId:run.runId,gold:copy.gold,materials:copy.materialLoot}};},persist);if(result.ok)run.rewarded=true;return result;}
+export function settleRun(profile,run,persist){if(!['won','lost'].includes(run.state))return {ok:false,error:'종료된 전투만 정산할 수 있습니다.'};const id=`reward:${run.runId}`;const result=transact(profile,id,p=>{const copy=structuredClone(run.snapshot());if(copy.encounter&&copy.encounter!=='stage')return {ok:false,error:'투기장 입장·보상 규칙은 아직 준비 중입니다.'};if(!grantRewards(p,copy))return {ok:true,record:{type:'reward',runId:run.runId,duplicate:true}};const before={...p.equipped};autoEquip(p,{settings:{strategy:copy.autoStrategy||p.settings.strategy},automation:copy.automation||p.automation});const equipment=Object.keys(SLOT_NAMES).map(slot=>({slot,before:before[slot],after:p.equipped[slot],beforeName:allItems(p).find(i=>i.id===before[slot])?.name||'없음',afterName:allItems(p).find(i=>i.id===p.equipped[slot])?.name||'없음',reason:p.lockedSlots[slot]?'잠근 부위 유지':before[slot]!==p.equipped[slot]?'추천 점수 개선':'현재 장비 유지'}));const history=p.history.find(r=>r.id===run.runId);if(history){history.equipment=equipment;history.loot=structuredClone(copy.loot||[]);history.level=copy.level;if(copy.performance)history.performance=structuredClone(copy.performance);}return {ok:true,record:{type:'reward',runId:run.runId,gold:copy.gold,materials:copy.materialLoot}};},persist);if(result.ok)run.rewarded=true;return result;}
 
 // Preparation commits one draft: automatic spending cannot outlive a failed run save.
 export function prepareRun(profile,{resume=false,floor=profile.selectedFloor,id}={},persist){
  return editProfile(profile,p=>{
-  if(resume){const game=Game.restore(p,p.run);if(!game)return {ok:false,error:'전투 저장을 읽지 못했습니다. 백업을 내보낸 뒤 새 도전을 시작하세요.'};p.run=game.snapshot();return {ok:true,game};}
+  if(resume){if(p.run?.encounter&&p.run.encounter!=='stage')return {ok:false,error:'투기장 입장·보상 규칙은 아직 준비 중입니다.'};const game=Game.restore(p,p.run);if(!game)return {ok:false,error:'전투 저장을 읽지 못했습니다. 백업을 내보낸 뒤 새 도전을 시작하세요.'};p.run=game.snapshot();return {ok:true,game};}
   if(p.run)return {ok:false,error:'저장된 전투를 먼저 이어하거나 정산하세요.'};
   if(!Number.isInteger(floor)||floor<1||floor>p.unlocked)return {ok:false,error:'아직 도전할 수 없는 층입니다.'};
   p.selectedFloor=floor;
@@ -74,6 +74,7 @@ export function settledRunBackup(profile,run){
 
 // Stage rewards, equipped gear and the next stage are one durable transition.
 export function advanceStage(profile,run,persist){
+ if(run.encounter&&run.encounter!=='stage')return {ok:false,error:'투기장 입장·보상 규칙은 아직 준비 중입니다.'};
  if(run.state!=='won')return {ok:false,error:'승리한 단계만 계속 진행할 수 있습니다.'};
  const result=editProfile(profile,p=>{
   if(p.appliedTransactionIds.includes(`reward:${run.runId}`)){
