@@ -45,3 +45,11 @@ export function automateAbilities(game,input){
  }if(best&&bestScore<danger(game,p.x,p.y))game.dash(best);
 }
 export function combineDirections(directions){let x=0,y=0;for(const d of directions){x+=d.x;y+=d.y;}const mag=Math.hypot(x,y);return {x:mag?x/Math.max(1,mag):0,y:mag?y/Math.max(1,mag):0};}
+
+// Independent mobile starter pool; the existing policy chooses without a prompt.
+export function grantStartingSkill(game){
+ game.choices=['fire','ice','lightning','orbit'];game.pendingLevels=1;game.state='choosing';
+ const decisions=resolveChoices(game);
+ for(const entry of decisions){entry.source='starting';entry.reason='시작 스킬 · '+entry.reason;}
+ return decisions;
+}

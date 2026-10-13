@@ -1,3 +1,4 @@
+import {grantStartingSkill} from './automation.js';
 import {normalizeItem,rollOption,OPTION_DEFS,itemStats,normalizeAutomation,normalizeGem,gemKey} from './content.js';
 import {Game,UPGRADES,SLOT_NAMES,costFor,allItems,organizeInventory,seededRandom,grantRewards} from './engine.js';
 export function upgradeRefund(profile){return UPGRADES.reduce((sum,u)=>{for(let i=0;i<profile.upgrades[u.id];i++)sum+=costFor(i);return sum;},0);}
@@ -58,7 +59,7 @@ export function prepareRun(profile,{resume=false,floor=profile.selectedFloor,id}
   if(!Number.isInteger(floor)||floor<1||floor>p.unlocked)return {ok:false,error:'아직 도전할 수 없는 층입니다.'};
   p.selectedFloor=floor;
   if(p.automation.upgradeBudget>0){if(typeof id!=='string'||!id)return {ok:false,error:'도전 준비 식별자가 없습니다.'};const upgraded=autoUpgrade(p,id,()=>{});if(!upgraded.ok)return upgraded;}
-  const game=new Game(p);p.run=game.snapshot();return {ok:true,game};
+  const game=new Game(p);if(p.unlocked>=4)grantStartingSkill(game);p.run=game.snapshot();return {ok:true,game};
  },persist);
 }
 
