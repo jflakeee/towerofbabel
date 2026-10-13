@@ -79,3 +79,26 @@ test('legacy saves start regeneration at zero and invalid timers cannot resume',
  const p=defaultProfile(),g=new Game(p,{seed:1}),snapshot=g.snapshot();delete snapshot.regenClock;assert.equal(Game.restore(p,snapshot).regenClock,0);
  for(const value of [-1,3,Infinity,null]){snapshot.regenClock=value;assert.equal(Game.restore(p,snapshot),null);}
 });
+
+
+test('victory sweeps distant experience and resolves levels before recording and continuing',()=>{
+ const p=defaultProfile(),g=new Game(p,{seed:19});g.xp=7;
+ const boss=g.spawn('boss');boss.hp=1;g.damageEnemy(boss,100,false);
+ assert.equal(g.state,'won');assert.equal(g.gems.length,1);
+ g.gems.push({x:1500,y:1500,value:17});
+ const result=advanceStage(p,g,()=>{});assert.equal(result.ok,true);
+ const next=result.game;assert.equal(next.level,3);assert.equal(next.xp,5);assert.equal(next.state,'playing');assert.equal(next.pendingLevels,0);assert.deepEqual(next.gems,[]);
+ assert.equal(Object.values(next.skills).reduce((a,b)=>a+b,0),2);
+ assert.deepEqual(p.history[0].skills,next.skills);assert.equal(p.history[0].level,3);assert.equal(p.history[0].decisions.length,2);
+ assert.equal(Game.restore(p,p.run).xp,5);
+});
+test('experience sweep is atomic across failed writes, retries, replay and recovery backup',()=>{
+ const p=defaultProfile(),g=new Game(p,{seed:21});g.gems=[{x:1500,y:1500,value:30}];g.state='won';p.run=g.snapshot();
+ const before=JSON.stringify(p),runBefore=JSON.stringify(g.snapshot());
+ assert.equal(advanceStage(p,g,()=>{throw Error('quota');}).ok,false);
+ assert.equal(JSON.stringify(p),before);assert.equal(JSON.stringify(g.snapshot()),runBefore);
+ const backup=continuousRunBackup(p,g);assert.equal(backup.ok,true);
+ const result=advanceStage(p,g,()=>{});assert.equal(result.ok,true);
+ assert.deepEqual(result.game.skills,backup.profile.run.skills);assert.equal(result.game.xp,backup.profile.run.xp);assert.equal(result.game.level,backup.profile.run.level);
+ const snapshot=JSON.stringify(p.run);assert.equal(advanceStage(p,g,()=>{}).ok,true);assert.equal(JSON.stringify(p.run),snapshot);assert.equal(p.history.length,1);
+});

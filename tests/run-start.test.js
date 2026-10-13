@@ -44,7 +44,8 @@ test('starter fallback records all-excluded policy and works for every hero',()=
 test('starter is not granted again on resume or automatic stage transitions',()=>{
  const p=defaultProfile();p.unlocked=4;const g=prepareRun(p,{id:'starter'},()=>{}).game,skills=structuredClone(g.skills);
  assert.deepEqual(prepareRun(p,{resume:true},()=>{}).game.skills,skills);
- g.state='won';const next=advanceStage(p,g,()=>{});assert.equal(next.ok,true);assert.deepEqual(next.game.skills,skills);assert.equal(next.game.decisionLog.length,0);
+ // Isolate the starter grant from experience swept at victory.
+ g.gems=[];g.state='won';const next=advanceStage(p,g,()=>{});assert.equal(next.ok,true);assert.deepEqual(next.game.skills,skills);assert.equal(next.game.decisionLog.length,0);
 });
 test('failed starter save preserves the profile and retry grants only one skill',()=>{
  const p=defaultProfile();p.unlocked=4;const before=JSON.stringify(p);

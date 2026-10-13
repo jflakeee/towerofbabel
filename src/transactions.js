@@ -1,4 +1,4 @@
-import {grantStartingSkill} from './automation.js';
+import {grantStartingSkill,resolveChoices} from './automation.js';
 import {normalizeItem,rollOption,OPTION_DEFS,itemStats,normalizeAutomation,normalizeGem,gemKey} from './content.js';
 import {Game,UPGRADES,SLOT_NAMES,costFor,allItems,organizeInventory,seededRandom,grantRewards,recordedSkills} from './engine.js';
 export function upgradeRefund(profile){return UPGRADES.reduce((sum,u)=>{for(let i=0;i<profile.upgrades[u.id];i++)sum+=costFor(i);return sum;},0);}
@@ -79,12 +79,19 @@ export function advanceStage(profile,run,persist){
   if(p.appliedTransactionIds.includes(`reward:${run.runId}`)){
    const game=Game.restore(p,p.run);return game?{ok:true,game,replayed:true}:{ok:false,error:'이미 정산된 전투입니다.'};
   }
-  const copy={state:run.state,runId:run.runId,snapshot:()=>run.snapshot()};
+  // Sweep remaining experience on a private copy, so a failed write can retry safely.
+  const copy=Game.restore(p,{...run.snapshot(),state:'playing'});
+  if(!copy)return {ok:false,error:'전투 상태를 복원하지 못했습니다. 결과 백업을 보관하세요.'};
+  if(run.performance)copy.performance=structuredClone(run.performance);
+  copy.state='won';
+  copy.gainXp(copy.gems.reduce((sum,gem)=>sum+Math.max(0,gem.value),0));copy.gems=[];
+  if(copy.pendingLevels){copy.state='playing';copy.offerChoices();resolveChoices(copy);}
+  copy.state='won';
   const settled=settleRun(p,copy,()=>{});if(!settled.ok)return settled;
   if(run.mode==='tower'&&run.floor<5)p.selectedFloor=run.floor+1;
   else if(run.mode==='tower'){p.journey.mode='chaos';p.journey.chaosDepth=1;}
   // Keep the live build and apply only newly equipped gear, without paid upgrades.
-  const game=Game.continueStage(p,run);p.run=game.snapshot();return {ok:true,game};
+  const game=Game.continueStage(p,copy);p.run=game.snapshot();return {ok:true,game};
  },persist);
  if(result.ok)run.rewarded=true;return result;
 }
