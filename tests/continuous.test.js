@@ -16,7 +16,7 @@ test('failed stage save rolls back rewards, equipment and next run, and can retr
 });
 test('tower completion enters chaos and chaos advances to a repeatable stage 20',()=>{
  const p=defaultProfile(),g=winner(p,5);assert.equal(advanceStage(p,g,()=>{}).game.depth,1);assert.equal(p.journey.mode,'chaos');
- for(const depth of [1,19,20]){p.journey.chaosDepth=depth;const next=new Game(p,{seed:1});next.state='won';p.run=next.snapshot();const r=advanceStage(p,next,()=>{});assert.equal(r.ok,true);assert.equal(r.game.mode,'chaos');assert.equal(r.game.depth,Math.min(20,depth+1));assert.ok(Game.restore(p,p.run));}
+ for(const depth of [1,19,20]){p.journey.chaosMaxDepth=20;p.journey.chaosDepth=depth;const next=new Game(p,{seed:1});next.state='won';p.run=next.snapshot();const r=advanceStage(p,next,()=>{});assert.equal(r.ok,true);assert.equal(r.game.mode,'chaos');assert.equal(r.game.depth,Math.min(20,depth+1));assert.ok(Game.restore(p,p.run));}
 });
 test('unfinished stages cannot trigger rewards or progression',()=>{
  const p=defaultProfile(),g=new Game(p),before=structuredClone(p);assert.equal(advanceStage(p,g,()=>{}).ok,false);assert.deepEqual(p,before);
