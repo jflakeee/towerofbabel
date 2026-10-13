@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {readFile} from 'node:fs/promises';import {defaultProfile} from '../src/engine.js';
+import test from 'node:test';import assert from 'node:assert/strict';import {readFile} from 'node:fs/promises';import {defaultProfile,Game} from '../src/engine.js';
 // A minimal DOM adapter checks event wiring, not browser layout or native touch behavior.
 const renderedColors=new Set(),ids=new Map(),all=[];const attrs=text=>Object.fromEntries([...text.matchAll(/([\w-]+)(?:="([^"]*)")?/g)].map(m=>[m[1],m[2]??'']));
 class Element{
@@ -46,5 +46,26 @@ test('mobile menus, paid preview, presets, automatic combat and result page are 
  const createUrl=URL.createObjectURL;let exported;URL.createObjectURL=blob=>{exported=blob;return 'blob:test';};
  try{ids.get('export-diagnostics').click();const report=JSON.parse(await exported.text()),record=report.history.at(-1);assert.equal(record.mode,'chaos');assert.equal(record.depth,17);assert.equal(record.difficulty,'nightmare');assert.equal(record.id,review.history.at(-1).id);}finally{URL.createObjectURL=createUrl;}
  ids.get('battle-results').click();assert.ok(ids.get('result-page').innerHTML.includes('악몽 · 혼돈 17단계'));
+ // Preview runs are isolated from an existing saved journey through every UI exit.
+ const previewProfile=JSON.parse(backup);previewProfile.run=new Game(previewProfile,{seed:73}).snapshot();previewProfile.run.time=17;
+ const previewJson=JSON.stringify(previewProfile);ids.get('settings').click();await ids.get('import-save').onchange({target:{files:[{size:previewJson.length,text:async()=>previewJson}]}});ids.get('confirm-import').click();
+ const originalSave=storage.getItem('babel-mobile-v1'),allSaved=new Map(storage.data);
+ ids.get('arena-preview').click();ids.get('cancel-arena-preview').click();assert.equal(storage.getItem('babel-mobile-v1'),originalSave);
+ const originalUpdate=Game.prototype.update;let previewGame,forced=null;
+ Game.prototype.update=function(...args){if(this.encounter==='dual-boss'){previewGame=this;this.player.invulnerable=10000;if(forced){this.gold=500;this.loot=[{id:'preview-only',name:'preview',slot:'weapon',value:999,rarity:4}];this.state=forced;return;}}return originalUpdate.apply(this,args);};
+ try{
+  ids.get('arena-preview').click();assert.ok(ids.get('dialog').innerHTML.includes('보상 지급 없음'));ids.get('begin-arena-preview').click();assert.equal(ids.get('battle').hidden,false);assert.equal(ids.get('b-name').textContent,'투기장 미리보기');assert.equal(ids.get('timer').textContent,'보스 제한 05:00');
+  let previewNow=performance.now();for(let i=0;i<400;i++){previewNow+=1000/60;frame(previewNow);}assert.ok(previewGame.time>5);assert.deepEqual(storage.data,allSaved,'periodic preview save must not write');
+  events.blur();const pausedAt=previewGame.time;frame(previewNow+1000);assert.equal(previewGame.time,pausedAt);assert.deepEqual(storage.data,allSaved);
+  ids.get('battle-results').click();assert.ok(ids.get('result-page').innerHTML.includes('미리보기 · 일시정지'));ids.get('preview-continue').click();assert.equal(ids.get('battle').hidden,false);ids.get('battle-results').click();
+  let previewExport;URL.createObjectURL=blob=>{previewExport=blob;return 'blob:preview';};ids.get('preview-diagnostics').click();URL.createObjectURL=createUrl;assert.equal(JSON.parse(await previewExport.text()).preview,true);
+  ids.get('preview-home').click();assert.deepEqual(storage.data,allSaved);assert.equal(ids.get('resume').hidden,false);
+  for(const outcome of ['won','lost']){
+   forced=outcome;ids.get('arena-preview').click();ids.get('begin-arena-preview').click();frame(performance.now()+100);
+   assert.equal(ids.get('result-page').hidden,false);assert.ok(ids.get('result-page').innerHTML.includes('보상 지급 없음'));assert.deepEqual(storage.data,allSaved);
+   ids.get('preview-retry').click();assert.equal(ids.get('battle').hidden,false);assert.equal(ids.get('timer').textContent,'보스 제한 05:00');ids.get('battle-results').click();ids.get('preview-home').click();assert.deepEqual(storage.data,allSaved);
+  }
+ }finally{Game.prototype.update=originalUpdate;URL.createObjectURL=createUrl;}
+ ids.get('resume').click();assert.equal(ids.get('b-name').textContent.includes('미리보기'),false);assert.equal(JSON.parse(storage.getItem('babel-mobile-v1')).run.time,17);
  events.pagehide();
 });
