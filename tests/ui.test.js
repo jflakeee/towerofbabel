@@ -66,11 +66,18 @@ test('mobile menus, paid preview, presets, automatic combat and result page are 
  const previewJson=JSON.stringify(previewProfile);ids.get('settings').click();await ids.get('import-save').onchange({target:{files:[{size:previewJson.length,text:async()=>previewJson}]}});ids.get('confirm-import').click();
  const originalSave=storage.getItem('babel-mobile-v1'),allSaved=new Map(storage.data);
  ids.get('arena-preview').click();ids.get('cancel-arena-preview').click();assert.equal(storage.getItem('babel-mobile-v1'),originalSave);
- const originalUpdate=Game.prototype.update;let previewGame,forced=null,hudOnly=false;
- Game.prototype.update=function(...args){if(this.encounter==='dual-boss'){previewGame=this;if(hudOnly)return;this.player.invulnerable=10000;if(forced){this.gold=500;this.loot=[{id:'preview-only',name:'preview',slot:'weapon',value:999,rarity:4}];this.state=forced;return;}}return originalUpdate.apply(this,args);};
+ const originalUpdate=Game.prototype.update;let previewGame,forced=null,hudOnly=false,terminalScenario=null,scenarioPrepared=false;
+ Game.prototype.update=function(...args){if(this.encounter==='dual-boss'){previewGame=this;if(hudOnly)return;this.player.invulnerable=10000;
+  if(terminalScenario&&!scenarioPrepared){scenarioPrepared=true;
+   if(terminalScenario==='timeout')for(const boss of this.livingBosses())boss.hp=boss.maxHp=1e9;
+   if(terminalScenario==='defeated'){this.player.invulnerable=0;this.hitPlayer(1e6);}
+   if(terminalScenario==='victory')for(const boss of this.livingBosses())this.damageEnemy(boss,1e9,false);
+  }
+  if(forced){this.gold=500;this.loot=[{id:'preview-only',name:'preview',slot:'weapon',value:999,rarity:4}];this.state=forced;return;}}return originalUpdate.apply(this,args);};
  try{
   ids.get('arena-preview').click();assert.ok(ids.get('dialog').innerHTML.includes('보상 지급 없음'));assert.ok(ids.get('dialog').innerHTML.includes('최고 정복 혼돈 7단계'));ids.get('begin-arena-preview').click();assert.equal(ids.get('battle').hidden,false);assert.equal(ids.get('b-name').textContent,'투기장 미리보기');assert.equal(ids.get('home').hidden,true);assert.equal(ids.get('lobby-header').hidden,true);assert.equal(document.activeElement,ids.get('battle-results'));assert.equal(ids.get('timer').textContent,'보스 제한 05:00');
   let previewNow=performance.now();for(let i=0;i<400;i++){previewNow+=1000/60;frame(previewNow);}assert.ok(previewGame.time>5);assert.equal(previewGame.depth,7);assert.equal(previewGame.arenaBestCleared,7);assert.equal(previewGame.floor,1);assert.deepEqual(storage.data,allSaved,'periodic preview save must not write');
+  for(let i=0;i<30;i++){previewNow+=1200;frame(previewNow);}
   // Each opponent keeps its own identity, health and offscreen cue after either death.
   hudOnly=true;const pair=previewGame.livingBosses(),bossState=pair.map(b=>({x:b.x,y:b.y,hp:b.hp}));
   const refreshHud=()=>{for(let i=0;i<12;i++){previewNow+=1000/60;frame(previewNow);}};
@@ -84,12 +91,32 @@ test('mobile menus, paid preview, presets, automatic combat and result page are 
   pair.forEach((b,i)=>Object.assign(b,bossState[i]));hudOnly=false;
   window.innerWidth=844;window.innerHeight=390;events.resize();assert.deepEqual(storage.data,allSaved,'preview rotation must not overwrite the saved run');window.innerWidth=390;window.innerHeight=844;events.resize();events.blur();assert.equal(ids.get('battle-help').hidden,false);assert.match(ids.get('battle-help').textContent,/일시정지/);const pausedAt=previewGame.time;frame(previewNow+1000);assert.equal(previewGame.time,pausedAt);assert.deepEqual(storage.data,allSaved);
   ids.get('battle-results').click();assert.ok(ids.get('result-page').innerHTML.includes('미리보기 · 일시정지'));assert.equal(document.activeElement,ids.get('result-page'));assert.ok(!ids.get('result-page').innerHTML.includes('id="dialog-title"'));ids.get('preview-continue').click();assert.equal(ids.get('battle-help').hidden,true);assert.equal(ids.get('battle').hidden,false);ids.get('battle-results').click();
-  let previewExport;URL.createObjectURL=blob=>{previewExport=blob;return 'blob:preview';};ids.get('preview-diagnostics').click();URL.createObjectURL=createUrl;const arenaReport=JSON.parse(await previewExport.text());assert.equal(arenaReport.preview,true);assert.equal(arenaReport.arenaBestCleared,7);assert.equal(arenaReport.depth,7);assert.ok(ids.get('result-page').innerHTML.includes('최고 정복 혼돈 7단계'));
+  let previewExport;URL.createObjectURL=blob=>{previewExport=blob;return 'blob:preview';};ids.get('preview-diagnostics').click();URL.createObjectURL=createUrl;const arenaReport=JSON.parse(await previewExport.text());assert.equal(arenaReport.preview,true);assert.equal(arenaReport.arenaBestCleared,7);assert.equal(arenaReport.depth,7);assert.equal(arenaReport.performance.p95Capped,true);assert.ok(ids.get('result-page').innerHTML.includes('1000+ms'));assert.ok(ids.get('result-page').innerHTML.includes('최고 정복 혼돈 7단계'));
   ids.get('preview-home').click();assert.deepEqual(storage.data,allSaved);assert.equal(ids.get('resume').hidden,false);assert.equal(ids.get('lobby-header').hidden,false);assert.equal(document.activeElement,ids.get('start'));
   for(const outcome of ['won','lost']){
    forced=outcome;ids.get('arena-preview').click();ids.get('begin-arena-preview').click();frame(performance.now()+100);
    assert.equal(ids.get('result-page').hidden,false);assert.ok(ids.get('result-page').innerHTML.includes('보상 지급 없음'));assert.deepEqual(storage.data,allSaved);
    ids.get('preview-retry').click();assert.equal(ids.get('battle').hidden,false);assert.equal(ids.get('timer').textContent,'보스 제한 05:00');ids.get('battle-results').click();ids.get('preview-home').click();assert.deepEqual(storage.data,allSaved);
+  }
+  forced=null;
+  // Engine-generated outcomes must reach the result page and restart without settling the saved journey.
+  for(const outcome of ['timeout','defeated','victory']){
+   terminalScenario=outcome;scenarioPrepared=false;
+   ids.get('arena-preview').click();ids.get('begin-arena-preview').click();
+   let now=performance.now();for(let i=0;i<18500&&ids.get('result-page').hidden;i++){now+=1000/60;frame(now);}
+   assert.equal(ids.get('result-page').hidden,false,`${outcome} reaches result page`);
+   assert.equal(previewGame.state,outcome==='victory'?'won':'lost');
+   assert.ok(ids.get('result-page').innerHTML.includes({timeout:'패배 · 시간 초과',defeated:'패배 · 체력 소진',victory:'미리보기 · 승리'}[outcome]));
+   assert.ok(!ids.get('result-page').innerHTML.includes('id="preview-continue"'));
+   if(outcome!=='timeout')assert.ok(ids.get('result-page').innerHTML.includes('평균 — FPS'));
+   if(outcome==='timeout'){assert.ok(previewGame.time>=300);assert.equal(previewGame.livingBosses().length,2);}
+   assert.deepEqual(storage.data,allSaved);
+   let terminalExport;URL.createObjectURL=blob=>{terminalExport=blob;return 'blob:terminal';};ids.get('preview-diagnostics').click();URL.createObjectURL=createUrl;
+   assert.equal(JSON.parse(await terminalExport.text()).outcome,outcome);
+   const endedId=previewGame.runId,endedTime=previewGame.time;frame(now+1000);assert.equal(previewGame.time,endedTime);
+   terminalScenario=null;ids.get('preview-retry').click();assert.equal(ids.get('timer').textContent,'보스 제한 05:00');
+   frame(performance.now()+50);assert.notEqual(previewGame.runId,endedId);assert.equal(previewGame.state,'playing');assert.ok(previewGame.time<1);assert.equal(previewGame.level,1);assert.equal(previewGame.livingBosses().length,2);assert.deepEqual(previewGame.loot,[]);
+   ids.get('battle-results').click();ids.get('preview-home').click();assert.deepEqual(storage.data,allSaved);
   }
  }finally{Game.prototype.update=originalUpdate;URL.createObjectURL=createUrl;}
  ids.get('resume').click();assert.equal(ids.get('boss-hud-2').hidden,true);assert.equal(ids.get('boss-direction-2').hidden,true);assert.equal(ids.get('b-name').textContent.includes('미리보기'),false);assert.equal(JSON.parse(storage.getItem('babel-mobile-v1')).run.time,17);
