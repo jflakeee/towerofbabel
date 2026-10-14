@@ -54,7 +54,7 @@ test('mobile menus, paid preview, presets, automatic combat and result page are 
  const originalUpdate=Game.prototype.update;let previewGame,forced=null,hudOnly=false;
  Game.prototype.update=function(...args){if(this.encounter==='dual-boss'){previewGame=this;if(hudOnly)return;this.player.invulnerable=10000;if(forced){this.gold=500;this.loot=[{id:'preview-only',name:'preview',slot:'weapon',value:999,rarity:4}];this.state=forced;return;}}return originalUpdate.apply(this,args);};
  try{
-  ids.get('arena-preview').click();assert.ok(ids.get('dialog').innerHTML.includes('보상 지급 없음'));ids.get('begin-arena-preview').click();assert.equal(ids.get('battle').hidden,false);assert.equal(ids.get('b-name').textContent,'투기장 미리보기');assert.equal(ids.get('timer').textContent,'보스 제한 05:00');
+  ids.get('arena-preview').click();assert.ok(ids.get('dialog').innerHTML.includes('보상 지급 없음'));ids.get('begin-arena-preview').click();assert.equal(ids.get('battle').hidden,false);assert.equal(ids.get('b-name').textContent,'투기장 미리보기');assert.equal(ids.get('home').hidden,true);assert.equal(ids.get('lobby-header').hidden,true);assert.equal(document.activeElement,ids.get('battle-results'));assert.equal(ids.get('timer').textContent,'보스 제한 05:00');
   let previewNow=performance.now();for(let i=0;i<400;i++){previewNow+=1000/60;frame(previewNow);}assert.ok(previewGame.time>5);assert.deepEqual(storage.data,allSaved,'periodic preview save must not write');
   // Each opponent keeps its own identity, health and offscreen cue after either death.
   hudOnly=true;const pair=previewGame.livingBosses(),bossState=pair.map(b=>({x:b.x,y:b.y,hp:b.hp}));
@@ -68,9 +68,9 @@ test('mobile menus, paid preview, presets, automatic combat and result page are 
   Object.assign(pair[0],{x:previewGame.player.x,y:previewGame.player.y});refreshHud();assert.equal(ids.get('boss-direction').hidden,true,'onscreen boss needs no edge cue');
   pair.forEach((b,i)=>Object.assign(b,bossState[i]));hudOnly=false;
   events.blur();const pausedAt=previewGame.time;frame(previewNow+1000);assert.equal(previewGame.time,pausedAt);assert.deepEqual(storage.data,allSaved);
-  ids.get('battle-results').click();assert.ok(ids.get('result-page').innerHTML.includes('미리보기 · 일시정지'));ids.get('preview-continue').click();assert.equal(ids.get('battle').hidden,false);ids.get('battle-results').click();
+  ids.get('battle-results').click();assert.ok(ids.get('result-page').innerHTML.includes('미리보기 · 일시정지'));assert.equal(document.activeElement,ids.get('result-page'));assert.ok(!ids.get('result-page').innerHTML.includes('id="dialog-title"'));ids.get('preview-continue').click();assert.equal(ids.get('battle').hidden,false);ids.get('battle-results').click();
   let previewExport;URL.createObjectURL=blob=>{previewExport=blob;return 'blob:preview';};ids.get('preview-diagnostics').click();URL.createObjectURL=createUrl;assert.equal(JSON.parse(await previewExport.text()).preview,true);
-  ids.get('preview-home').click();assert.deepEqual(storage.data,allSaved);assert.equal(ids.get('resume').hidden,false);
+  ids.get('preview-home').click();assert.deepEqual(storage.data,allSaved);assert.equal(ids.get('resume').hidden,false);assert.equal(ids.get('lobby-header').hidden,false);assert.equal(document.activeElement,ids.get('start'));
   for(const outcome of ['won','lost']){
    forced=outcome;ids.get('arena-preview').click();ids.get('begin-arena-preview').click();frame(performance.now()+100);
    assert.equal(ids.get('result-page').hidden,false);assert.ok(ids.get('result-page').innerHTML.includes('보상 지급 없음'));assert.deepEqual(storage.data,allSaved);
