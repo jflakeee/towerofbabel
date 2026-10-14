@@ -14,15 +14,18 @@ try{store=new ProfileStore(localStorage,navigator.locks,KEY);await store.open();
 let bossSlots=[],game=null,paused=false,modalKind='',lastFocus=null,audio=null,raf=0,lastTime=0,stepAccumulator=0,saveClock=0,hudClock=0,toastTimer,announcementTimer,autoNoticeTimer,musicClock=0,musicStep=0,w=0,h=0,dpr=1,zoom=1;
 const ctx=$('canvas').getContext('2d'),input={x:0,y:0},joystick=new MobileJoystick(),diagnostics=new CombatDiagnostics();
 function showLobby(visible){$('home').hidden=!visible;$('lobby-header').hidden=!visible;}
+function showPauseNotice(message='일시정지 · 화면을 터치하면 계속합니다'){const notice=$('battle-help');notice.textContent=message;notice.classList.add('paused-notice');notice.hidden=false;}
+function clearPauseNotice(){const notice=$('battle-help');notice.classList.remove('paused-notice');notice.hidden=true;}
+function resumeBattle(){paused=document.hidden;lastTime=performance.now();stepAccumulator=0;if(paused)showPauseNotice();else clearPauseNotice();}
 function isArenaPreview(){return game?.encounter==='dual-boss';}
 function save(){
  if(isArenaPreview())return true;
  try{if(game&&['playing','choosing'].includes(game.state))profile.run=game.snapshot();store.write(profile);if(!storageAvailable&&store.writable)$('save-banner').hidden=true;storageAvailable=true;return true;}
  catch{
-  storageAvailable=false;if(game&&['playing','choosing'].includes(game.state)){paused=true;diagnostics.interrupt();resetInput();}
+  storageAvailable=false;if(game&&['playing','choosing'].includes(game.state)){paused=true;diagnostics.interrupt();resetInput();showPauseNotice('저장 실패 · 저장 재시도 또는 현재 진행 백업을 선택하세요.');}
   if(store&&!store.writable)blockWrites();else{
    $('save-banner').hidden=false;$('save-banner').innerHTML='저장 실패 · 진행을 일시정지했습니다. 저장 공간을 확보하거나 현재 진행을 백업하세요. <button id="retry-save">저장 재시도</button><button id="pending-save-export">현재 진행 백업</button>';
-   $('retry-save').onclick=()=>{if(save()){$('battle-help').textContent='저장 완료 · 화면을 터치하면 계속합니다';$('battle-help').hidden=false;toast('현재 진행을 저장했습니다.');}};$('pending-save-export').onclick=exportSave;
+   $('retry-save').onclick=()=>{if(save()){showPauseNotice('저장 완료 · 화면을 터치하면 계속합니다');toast('현재 진행을 저장했습니다.');}};$('pending-save-export').onclick=exportSave;
   }
   return false;
  }
@@ -120,6 +123,7 @@ function startGame(resume=false,floor=profile.selectedFloor){
  game=prepared.game;beginBattle(resume);
 }
 function beginBattle(resume=false){
+ clearPauseNotice();
  bossSlots=game.livingBosses().map(b=>b.id);
  storageAvailable=true;$('result-page').hidden=true;closeModal();showLobby(false);
 
@@ -137,7 +141,7 @@ function showArenaPreviewResult(){
  const active=['playing','choosing'].includes(game.state);if(active)pauseGame();
  const metrics=diagnostics.summary(),report={build:BUILD_TIME,preview:true,encounter:'dual-boss',hero:game.hero,state:active?'paused':game.state,time:game.time,kills:game.kills,bossesRemaining:game.livingBosses().length,performance:metrics};
  showResultPage(`<span class="section-kicker">ARENA PREVIEW</span><h2 id="dialog-title">투기장 미리보기 · ${active?'일시정지':game.state==='won'?'승리':'종료'}</h2><p>전투 ${formatTime(game.time)} · 처치 ${game.kills} · 남은 보스 ${report.bossesRemaining}체</p><p>보상 지급 없음 · 기존 저장된 전투와 재화는 유지됩니다.</p><p>평균 ${metrics.fps||0} FPS · 화면 지연 95% 기준 ${metrics.p95ms||0}ms</p>${active?'<button id="preview-continue" class="primary">미리보기 계속</button>':'<button id="preview-retry" class="primary">다시 미리보기</button>'}<button id="preview-home" class="secondary">미리보기 종료 · 로비로</button><button id="preview-diagnostics" class="secondary">미리보기 진단 내보내기</button>`);
- if(active)$('preview-continue').onclick=()=>{modalKind='';$('result-page').hidden=true;$('battle').hidden=false;$('battle-results').focus();document.body.style.overflow='hidden';paused=document.hidden;lastTime=performance.now();stepAccumulator=0;};
+ if(active)$('preview-continue').onclick=()=>{modalKind='';$('result-page').hidden=true;$('battle').hidden=false;$('battle-results').focus();document.body.style.overflow='hidden';resumeBattle();};
  else $('preview-retry').onclick=()=>{game=new Game(structuredClone(profile),{encounter:'dual-boss'});beginBattle();};
  $('preview-home').onclick=goHome;$('preview-diagnostics').onclick=()=>exportSave(report,'babel-arena-preview.json');
 }
@@ -160,7 +164,7 @@ $('battle').addEventListener('pointerdown',e=>{
  if(!storageAvailable&&!save())return;
  const previousPointer=joystick.pointerId;
  if(!joystick.begin(e.pointerId,e.clientX,e.clientY,$('joystick').getBoundingClientRect()))return;
- if(paused){paused=false;lastTime=performance.now();$('battle-help').textContent='화면 어디든 드래그해 이동 · 나머지는 자동';}
+ if(paused)resumeBattle();
  diagnostics.touch(e.clientX,window.innerWidth);$('joystick').style.left=`${e.clientX}px`;$('joystick').style.top=`${e.clientY}px`;
  if(previousPointer!==null&&previousPointer!==e.pointerId&&$('battle').hasPointerCapture?.(previousPointer))$('battle').releasePointerCapture(previousPointer);
  try{$('battle').setPointerCapture?.(e.pointerId);}catch{/* Window move/up handlers still release input if capture is unavailable. */}
@@ -173,7 +177,7 @@ window.addEventListener('keydown',e=>{
  if(e.key==='Tab'&&!$('overlay').hidden){const f=[...$('dialog').querySelectorAll('button:not(:disabled),a,input,select')];if(f.length){const first=f[0],last=f.at(-1);if(e.shiftKey&&(document.activeElement===first||document.activeElement===$('dialog'))){e.preventDefault();last.focus();}else if(!e.shiftKey&&(document.activeElement===last||document.activeElement===$('dialog'))){e.preventDefault();first.focus();}}}
  if(e.key==='Escape'&&!game&&!$('overlay').hidden)closeModal();
 });
-function pauseGame(){if(!game||!['playing','choosing'].includes(game.state)||paused)return;paused=true;diagnostics.interrupt();resetInput();save();$('battle-help').textContent='일시정지 · 화면을 터치하면 계속합니다';$('battle-help').hidden=false;}
+function pauseGame(){if(!game||!['playing','choosing'].includes(game.state)||paused)return;paused=true;diagnostics.interrupt();resetInput();if(save())showPauseNotice();}
 function goHome(){save();closeModal();$('result-page').hidden=true;showLobby(true);cancelAnimationFrame(raf);game=null;paused=false;resetInput();$('battle').hidden=true;document.body.style.overflow='';renderHome();$('start').focus();}
 function showChoices(){const decisions=resolveChoices(game);if(decisions.length){const last=decisions.at(-1),skill=SKILLS.find(s=>s.id===last.id);$('auto-status').textContent=`자동 선택 · ${skill.name} · ${last.reason}`;clearTimeout(autoNoticeTimer);autoNoticeTimer=setTimeout(()=>{if(game)$('auto-status').textContent=`자동 선택 성향 · ${STRATEGIES[game.autoStrategy]||'균형'}`;},3500);sound('level');save();updateHud();}}
 function showResultPage(html){modalKind='result';resetInput();$('battle').hidden=true;showLobby(false);$('result-page').hidden=false;$('result-page').innerHTML=html.replaceAll('id="dialog-title"','id="result-title"');$('result-page').focus();document.body.style.overflow='';}
@@ -184,7 +188,7 @@ function finishGame(){
  if(!settled.ok){showResultPage(`<h2 id="dialog-title">보상 저장 대기</h2><p>${esc(settled.error)}<br>저장에 성공하면 계속 진행합니다.</p><button id="retry-reward" class="primary">저장 후 계속</button><button id="export-pending" class="secondary">미정산 결과 백업</button>`);$('retry-reward').onclick=finishGame;$('export-pending').onclick=()=>{const backup=continuousRunBackup(profile,game);if(backup.ok)exportSave(backup.profile,'babel-pending-reward.json');else toast(backup.error);};return;}
  renderHome();sound(won?'win':'hit');
  if(won){
-  game=settled.game;storageAvailable=true;paused=document.hidden;modalKind='';$('result-page').hidden=true;$('battle').hidden=false;document.body.style.overflow='hidden';
+  game=settled.game;storageAvailable=true;resumeBattle();modalKind='';$('result-page').hidden=true;$('battle').hidden=false;document.body.style.overflow='hidden';
   diagnostics.start({build:BUILD_TIME,width:window.innerWidth,height:window.innerHeight,quality:profile.settings.quality,resumed:false});
   stepAccumulator=0;saveClock=0;hudClock=0;lastTime=performance.now();updateHud();
   announce(`자동 장착 완료 · ${game.mode==='chaos'?'혼돈 '+game.depth+'단계':game.floor+'층'} 시작`);
@@ -198,7 +202,7 @@ function showBattleResults(){
  const rows=[...profile.history].reverse();
  showResultPage(`<span class="section-kicker">BATTLE RESULTS</span><h2 id="dialog-title">전투 결과 · 자동 장착</h2><p>${active?battleStageLabel(game)+' · 일시정지 중입니다. 계속하면 같은 전투로 돌아갑니다.':'전투가 종료되었습니다.'}</p>${active?'<button id="result-continue" class="primary">전투 계속</button>':''}<button id="result-home" class="secondary">전투 종료 · 로비로</button><p>장비 변경은 로비에서 할 수 있습니다. 최근 20개 단계의 결과입니다.</p>${rows.map(r=>`<section class="history-row"><h3>${battleStageLabel(r)} · ${r.state==='won'?'정복':'종료'}</h3><p>처치 ${r.kills} · 파편 +${r.gold} · ${formatTime(r.time)}</p><div class="build-list"><strong>장비 자동 장착</strong>${equipmentHistory(r.equipment)}</div>${(r.loot||[]).map(i=>{const slot=r.equipment?.find(e=>e.slot===i.slot);return `<div class="item-row"><div><strong>${esc(i.name)}</strong><p>${itemText(i)}</p><p>${slot?.after===i.id?'자동 장착됨':slot?.reason==='잠근 부위 유지'?'보관됨 · 잠금으로 기존 장비 유지':'보관됨 · 더 높은 추천 점수의 장비 유지'}</p></div></div>`;}).join('')}${skillHistory(r)}<details><summary>이 단계의 자동 선택 기록</summary>${decisionHistory(r.decisions)}</details></section>`).join('')||'<p>아직 완료한 단계가 없습니다.</p>'}`);
  $('battle-results').textContent='전투 결과 확인';
- if(active)$('result-continue').onclick=()=>{modalKind='';$('result-page').hidden=true;$('battle').hidden=false;$('battle-results').focus();document.body.style.overflow='hidden';paused=document.hidden;lastTime=performance.now();stepAccumulator=0;};
+ if(active)$('result-continue').onclick=()=>{modalKind='';$('result-page').hidden=true;$('battle').hidden=false;$('battle-results').focus();document.body.style.overflow='hidden';resumeBattle();};
  $('result-home').onclick=()=>{
   if(active){const snapshot=game.snapshot();snapshot.state='lost';snapshot.performance=diagnostics.summary();const copy={state:'lost',runId:game.runId,snapshot:()=>snapshot};const result=settleRun(profile,copy,persistTransaction);if(!result.ok){toast(result.error);return;}game.state='lost';game.rewarded=true;}
   goHome();
