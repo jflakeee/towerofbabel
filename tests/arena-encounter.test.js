@@ -41,3 +41,27 @@ test('legacy stages keep their timeline and invalid encounter saves are rejected
  const valid=arena(p).snapshot();for(const edit of [{encounter:'unknown'},{duration:90},{bossSpawned:false},{enemies:[]}])assert.equal(Game.restore(p,{...valid,...edit}),null);
  assert.throws(()=>new Game(p,{encounter:'unknown'}));
 });
+
+test('arena scales from cleared chaos progress, not selected or unlocked stages',()=>{
+ const p=defaultProfile();Object.assign(p.journey,{chaosUnlocked:true,chaosMaxDepth:20,chaosDepth:19,chaosBestCleared:7});
+ const before=structuredClone(p),base=arena(p);
+ assert.equal(base.arenaBestCleared,7);assert.equal(base.depth,7);assert.equal(base.floor,1);assert.equal(base.mode,'chaos');assert.deepEqual(p,before);
+ for(const mode of ['tower','chaos'])for(const floor of [1,5])for(const depth of [1,20]){
+  const other=structuredClone(p);other.selectedFloor=floor;Object.assign(other.journey,{mode,chaosDepth:depth});
+  const g=arena(other);assert.deepEqual(g.enemies,base.enemies);assert.equal(g.floor,base.floor);assert.equal(g.depth,7);
+ }
+ // Fixed arena content prevents a lower floor cycle from weakening later milestones.
+ let previousHp=0;for(const best of [0,1,5,6,10,11,20]){
+  p.journey.chaosBestCleared=best;const g=arena(p);assert.equal(g.depth,Math.max(1,best));assert.ok(g.currentBoss().maxHp>=previousHp);previousHp=g.currentBoss().maxHp;
+ }
+ const stage=new Game(before,{seed:47});assert.equal(stage.mode,'tower');assert.equal(stage.floor,before.selectedFloor);assert.equal(stage.arenaBestCleared,null);
+});
+
+test('arena retains its entry scaling after restore and rejects inconsistent scaling metadata',()=>{
+ const p=defaultProfile();Object.assign(p.journey,{chaosUnlocked:true,chaosMaxDepth:20,chaosBestCleared:7});
+ const g=arena(p),snapshot=g.snapshot();p.journey.chaosBestCleared=20;
+ const restored=Game.restore(p,snapshot);assert.ok(restored);assert.equal(restored.arenaBestCleared,7);assert.equal(restored.depth,7);assert.deepEqual(restored.enemies,g.enemies);
+ for(const edit of [{arenaBestCleared:-1},{arenaBestCleared:21},{arenaBestCleared:1.5},{arenaBestCleared:8},{mode:'tower'},{floor:2}])assert.equal(Game.restore(p,{...snapshot,...edit}),null);
+ const legacy={...snapshot,mode:'tower',floor:3,depth:1};delete legacy.arenaBestCleared;
+ const old=Game.restore(p,legacy);assert.ok(old);assert.equal(old.arenaBestCleared,null);assert.equal(old.floor,3);assert.equal(old.mode,'tower');
+});
