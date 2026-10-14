@@ -11,7 +11,7 @@ import {STRATEGIES,resolveChoices,automateAbilities} from './automation.js';
 const $=id=>document.getElementById(id),svg=(id,cls='')=>`<svg class="${cls}" aria-hidden="true"><use href="#i-${id}"/></svg>`,esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const KEY='babel-mobile-v1';let storageAvailable=true,profile,store,workerRegistration=null,offlineReady=false,updateRequested=false;const wasControlled=!!navigator.serviceWorker?.controller;
 try{store=new ProfileStore(localStorage,navigator.locks,KEY);await store.open();const loaded=store.read();profile=loadProfile(loaded.profile);if(loaded.recovered)document.getElementById('save-banner').textContent='백업 저장에서 복구했습니다.';}catch{profile=defaultProfile();storageAvailable=false;}
-let game=null,paused=false,modalKind='',lastFocus=null,audio=null,raf=0,lastTime=0,stepAccumulator=0,saveClock=0,hudClock=0,toastTimer,announcementTimer,autoNoticeTimer,musicClock=0,musicStep=0,w=0,h=0,dpr=1,zoom=1;
+let bossSlots=[],game=null,paused=false,modalKind='',lastFocus=null,audio=null,raf=0,lastTime=0,stepAccumulator=0,saveClock=0,hudClock=0,toastTimer,announcementTimer,autoNoticeTimer,musicClock=0,musicStep=0,w=0,h=0,dpr=1,zoom=1;
 const ctx=$('canvas').getContext('2d'),input={x:0,y:0},joystick=new MobileJoystick(),diagnostics=new CombatDiagnostics();
 function isArenaPreview(){return game?.encounter==='dual-boss';}
 function save(){
@@ -119,6 +119,7 @@ function startGame(resume=false,floor=profile.selectedFloor){
  game=prepared.game;beginBattle(resume);
 }
 function beginBattle(resume=false){
+ bossSlots=game.livingBosses().map(b=>b.id);
  storageAvailable=true;$('result-page').hidden=true;$('home').hidden=false;closeModal();
 
  diagnostics.start({build:BUILD_TIME,width:window.innerWidth,height:window.innerHeight,quality:profile.settings.quality,resumed:resume});stepAccumulator=0;paused=false;$('battle').hidden=false;document.body.style.overflow='hidden';resize();applyControls();lastTime=performance.now();saveClock=0;hudClock=0;updateHud();draw();cancelAnimationFrame(raf);raf=requestAnimationFrame(loop);sound('start');
@@ -208,8 +209,19 @@ function formatTime(seconds){return `${String(Math.floor(seconds/60)).padStart(2
 function updateHud(){
  if(!game)return;const p=game.player;$('hp-fill').style.width=`${p.hp/p.maxHp*100}%`;$('hp-text').textContent=`${Math.ceil(p.hp)} / ${p.maxHp}`;$('xp-fill').style.width=`${game.xp/game.nextXp*100}%`;$('level').textContent=`LV.${game.level}`;$('b-floor').textContent=`${String(game.floor).padStart(2,'0')}F`;$('b-name').textContent=isArenaPreview()?'투기장 미리보기':(game.mode==='chaos'?'혼돈 '+game.depth+' · ':'')+FLOORS[game.floor-1].name;$('kills').textContent=game.kills;$('run-gold').textContent=isArenaPreview()?'미지급':game.gold;
  $('timer').textContent=game.bossSpawned?`보스 제한 ${formatTime(game.timeRemaining())}`:`${formatTime(game.time)} / ${formatTime(game.duration)}`;
- const bosses=game.livingBosses(),boss=game.currentBoss();$('boss-hud').hidden=!boss;if(boss){$('boss-fill').style.width=`${Math.max(0,boss.hp/boss.maxHp*100)}%`;$('boss-hud').querySelector('span').textContent=BOSS_PATTERNS[game.floor-1].name+(bosses.length>1?' · '+bosses.length+'체 남음':'')+(boss.hp/boss.maxHp<=.4?' · 분노':'');}
- const marker=$('boss-direction');marker.hidden=true;if(boss&&boss.hp>0){const dx=(boss.x-p.x)*zoom,dy=(boss.y-p.y)*zoom;const rx=Math.max(30,w/2-45),ry=Math.max(30,h/2-70);if(Math.abs(dx)>rx||Math.abs(dy)>ry){const scale=Math.min(rx/(Math.abs(dx)||1),ry/(Math.abs(dy)||1));marker.hidden=false;marker.style.left=`${w/2+dx*scale}px`;marker.style.top=`${h/2+dy*scale}px`;marker.querySelector('b').style.transform=`rotate(${Math.atan2(dy,dx)}rad)`;}}
+ const bosses=game.livingBosses(),dual=isArenaPreview(),tracked=dual?bossSlots.map(id=>bosses.find(b=>b.id===id)):[game.currentBoss()],markers=[];
+ for(let i=0;i<2;i++){
+  const suffix=i?'-2':'',boss=tracked[i],row=$('boss-hud'+suffix),marker=$('boss-direction'+suffix),label=dual?`보스 ${i+1}`:BOSS_PATTERNS[game.floor-1].name;
+  row.hidden=!boss;marker.hidden=true;if(!boss)continue;
+  const percent=clamp(boss.hp/boss.maxHp*100,0,100);
+  $('boss-fill'+suffix).style.width=`${percent}%`;row.querySelector('span').textContent=`${label} · ${Math.ceil(percent)}%${percent<=40?' · 분노':''}`;
+  const dx=(boss.x-p.x)*zoom,dy=(boss.y-p.y)*zoom,rx=Math.max(30,w/2-45),ry=Math.max(30,h/2-70);
+  if(['playing','choosing'].includes(game.state)&&(Math.abs(dx)>rx||Math.abs(dy)>ry)){
+   const ratio=Math.min(rx/(Math.abs(dx)||1),ry/(Math.abs(dy)||1));let x=w/2+dx*ratio,y=h/2+dy*ratio;
+   if(markers.some(m=>Math.abs(m.x-x)<60&&Math.abs(m.y-y)<44))y+=y<h/2?44:-44;
+   markers.push({x,y});marker.hidden=false;marker.style.left=`${x}px`;marker.style.top=`${y}px`;marker.querySelector('b').style.transform=`rotate(${Math.atan2(dy,dx)}rad)`;marker.querySelector('span').textContent=dual?label:'보스';marker.setAttribute('aria-label',`화면 밖 ${label} 방향`);
+  }
+ }
  const active=['playing','choosing'].includes(game.state),lowHp=active&&p.hp>0&&p.hp/p.maxHp<=.25,urgent=active&&game.bossSpawned&&game.timeRemaining()<=15;
  $('battle').classList.toggle('low-health',lowHp);$('timer').classList.toggle('urgent',urgent);
  const warning=$('combat-warning'),warningText=[lowHp?'체력 부족 · 안전한 방향으로 이동하세요':'',urgent?'시간 임박 · 수문장을 처치하세요':''].filter(Boolean).join(' / ');
@@ -316,6 +328,7 @@ function drawEnemy(e){
   }
   if(boss){circle(0,-28,29,null,FLOORS[game.floor-1].color);path([[-11,-37],[-15,-51],[-5,-43],[0,-55],[5,-43],[15,-51],[11,-37]],'#af976a','#574e3c');circle(-5,-32,2,'#e8a168');circle(6,-32,2,'#e8a168');}
  }
+ if(boss&&isArenaPreview()){const slot=bossSlots.indexOf(e.id);ctx.font='bold 9px system-ui';ctx.textAlign='center';ctx.fillStyle=slot===1?'#86b9aa':'#f2a39b';ctx.fillText(`보스 ${slot+1}`,0,23);}
  if(e.hp<e.maxHp&&!boss){ctx.fillStyle='#0b1415';ctx.fillRect(-17,12,34,3);ctx.fillStyle=elite?'#c6a66e':'#ac8173';ctx.fillRect(-17,12,34*Math.max(0,e.hp/e.maxHp),3);}ctx.restore();
 }
 renderHome();applyControls();resize();if(!store?.writable)blockWrites();else if($('save-banner').textContent)$('save-banner').hidden=false;if('serviceWorker'in navigator&&location.protocol!=='file:'){

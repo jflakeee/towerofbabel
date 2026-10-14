@@ -38,3 +38,6 @@
 .battle .joystick{z-index:4}
 
 .battle-results{position:absolute;top:max(8px,env(safe-area-inset-top));right:12px;z-index:6;pointer-events:auto;min-height:44px;padding:8px 12px;background:#1c292b;color:var(--gold);border:1px solid var(--line);border-radius:8px;font-size:12px}.battle-hud{padding-top:58px}
+
+/* Keep both arena opponents visible without doubling HUD height. */
+.boss-roster{display:flex;gap:12px}.boss-roster .boss-hud{flex:1;min-width:0}.boss-roster .boss-hud span{display:block;overflow-wrap:anywhere}#boss-hud-2,#boss-direction-2{color:var(--teal)}#boss-fill-2{background:var(--teal)}

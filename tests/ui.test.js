@@ -51,11 +51,22 @@ test('mobile menus, paid preview, presets, automatic combat and result page are 
  const previewJson=JSON.stringify(previewProfile);ids.get('settings').click();await ids.get('import-save').onchange({target:{files:[{size:previewJson.length,text:async()=>previewJson}]}});ids.get('confirm-import').click();
  const originalSave=storage.getItem('babel-mobile-v1'),allSaved=new Map(storage.data);
  ids.get('arena-preview').click();ids.get('cancel-arena-preview').click();assert.equal(storage.getItem('babel-mobile-v1'),originalSave);
- const originalUpdate=Game.prototype.update;let previewGame,forced=null;
- Game.prototype.update=function(...args){if(this.encounter==='dual-boss'){previewGame=this;this.player.invulnerable=10000;if(forced){this.gold=500;this.loot=[{id:'preview-only',name:'preview',slot:'weapon',value:999,rarity:4}];this.state=forced;return;}}return originalUpdate.apply(this,args);};
+ const originalUpdate=Game.prototype.update;let previewGame,forced=null,hudOnly=false;
+ Game.prototype.update=function(...args){if(this.encounter==='dual-boss'){previewGame=this;if(hudOnly)return;this.player.invulnerable=10000;if(forced){this.gold=500;this.loot=[{id:'preview-only',name:'preview',slot:'weapon',value:999,rarity:4}];this.state=forced;return;}}return originalUpdate.apply(this,args);};
  try{
   ids.get('arena-preview').click();assert.ok(ids.get('dialog').innerHTML.includes('보상 지급 없음'));ids.get('begin-arena-preview').click();assert.equal(ids.get('battle').hidden,false);assert.equal(ids.get('b-name').textContent,'투기장 미리보기');assert.equal(ids.get('timer').textContent,'보스 제한 05:00');
   let previewNow=performance.now();for(let i=0;i<400;i++){previewNow+=1000/60;frame(previewNow);}assert.ok(previewGame.time>5);assert.deepEqual(storage.data,allSaved,'periodic preview save must not write');
+  // Each opponent keeps its own identity, health and offscreen cue after either death.
+  hudOnly=true;const pair=previewGame.livingBosses(),bossState=pair.map(b=>({x:b.x,y:b.y,hp:b.hp}));
+  const refreshHud=()=>{for(let i=0;i<12;i++){previewNow+=1000/60;frame(previewNow);}};
+  Object.assign(pair[0],{x:previewGame.player.x-1000,y:previewGame.player.y,hp:pair[0].maxHp*.25});Object.assign(pair[1],{x:previewGame.player.x+1000,y:previewGame.player.y,hp:pair[1].maxHp*.75});refreshHud();
+  assert.equal(ids.get('boss-fill').style.width,'25%');assert.equal(ids.get('boss-fill-2').style.width,'75%');assert.match(ids.get('boss-hud').querySelector('span').textContent,/보스 1.*분노/);assert.match(ids.get('boss-hud-2').querySelector('span').textContent,/보스 2/);
+  assert.equal(ids.get('boss-direction').hidden,false);assert.equal(ids.get('boss-direction-2').hidden,false);assert.ok(parseFloat(ids.get('boss-direction').style.left)<parseFloat(ids.get('boss-direction-2').style.left));
+  pair[1].x=pair[0].x;refreshHud();assert.notEqual(ids.get('boss-direction').style.top,ids.get('boss-direction-2').style.top,'coincident cues remain separate');
+  pair[0].hp=0;refreshHud();assert.equal(ids.get('boss-hud').hidden,true);assert.equal(ids.get('boss-direction').hidden,true);assert.equal(ids.get('boss-hud-2').hidden,false);assert.match(ids.get('boss-direction-2').querySelector('span').textContent,/보스 2/);
+  pair[0].hp=bossState[0].hp;pair[1].hp=0;refreshHud();assert.equal(ids.get('boss-hud-2').hidden,true);assert.equal(ids.get('boss-direction-2').hidden,true);assert.equal(ids.get('boss-hud').hidden,false);
+  Object.assign(pair[0],{x:previewGame.player.x,y:previewGame.player.y});refreshHud();assert.equal(ids.get('boss-direction').hidden,true,'onscreen boss needs no edge cue');
+  pair.forEach((b,i)=>Object.assign(b,bossState[i]));hudOnly=false;
   events.blur();const pausedAt=previewGame.time;frame(previewNow+1000);assert.equal(previewGame.time,pausedAt);assert.deepEqual(storage.data,allSaved);
   ids.get('battle-results').click();assert.ok(ids.get('result-page').innerHTML.includes('미리보기 · 일시정지'));ids.get('preview-continue').click();assert.equal(ids.get('battle').hidden,false);ids.get('battle-results').click();
   let previewExport;URL.createObjectURL=blob=>{previewExport=blob;return 'blob:preview';};ids.get('preview-diagnostics').click();URL.createObjectURL=createUrl;assert.equal(JSON.parse(await previewExport.text()).preview,true);
@@ -66,6 +77,6 @@ test('mobile menus, paid preview, presets, automatic combat and result page are 
    ids.get('preview-retry').click();assert.equal(ids.get('battle').hidden,false);assert.equal(ids.get('timer').textContent,'보스 제한 05:00');ids.get('battle-results').click();ids.get('preview-home').click();assert.deepEqual(storage.data,allSaved);
   }
  }finally{Game.prototype.update=originalUpdate;URL.createObjectURL=createUrl;}
- ids.get('resume').click();assert.equal(ids.get('b-name').textContent.includes('미리보기'),false);assert.equal(JSON.parse(storage.getItem('babel-mobile-v1')).run.time,17);
+ ids.get('resume').click();assert.equal(ids.get('boss-hud-2').hidden,true);assert.equal(ids.get('boss-direction-2').hidden,true);assert.equal(ids.get('b-name').textContent.includes('미리보기'),false);assert.equal(JSON.parse(storage.getItem('babel-mobile-v1')).run.time,17);
  events.pagehide();
 });
