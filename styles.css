@@ -41,3 +41,5 @@
 
 /* Keep both arena opponents visible without doubling HUD height. */
 .boss-roster{display:flex;gap:12px}.boss-roster .boss-hud{flex:1;min-width:0}.boss-roster .boss-hud span{display:block;overflow-wrap:anywhere}#boss-hud-2,#boss-direction-2{color:var(--teal)}#boss-fill-2{background:var(--teal)}
+
+.battle-help.paused-notice{display:block;z-index:8;left:50%;right:auto;top:50%;bottom:auto;transform:translate(-50%,-50%);width:min(88%,420px);padding:16px 20px;border:1px solid var(--gold);border-radius:8px;background:#0b1216ed;color:var(--text);font-size:14px;line-height:1.7;box-shadow:0 8px 32px #0008;pointer-events:none}
