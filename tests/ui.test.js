@@ -31,6 +31,21 @@ test('mobile menus, paid preview, presets, automatic combat and result page are 
  assert.equal(ids.get('joystick').style.left,'350px');events.pointermove({pointerId:3,clientX:307,clientY:715,preventDefault(){}});
  assert.ok(ids.get('joystick-stick').style.transform.includes('-43px'));events.lostpointercapture({pointerId:2});assert.ok(ids.get('joystick-stick').style.transform.includes('-43px'));
  events.pointerup({pointerId:3});assert.equal(ids.get('joystick-stick').style.transform,'translate(calc(-50% + 0px),calc(-50% + 0px))');
+ // Rotation must freeze combat, clear held movement and persist before a fresh touch resumes.
+ pad.listeners.pointerdown({pointerId:30,pointerType:'touch',button:0,clientX:350,clientY:715,preventDefault(){}});
+ events.pointermove({pointerId:30,clientX:307,clientY:715,preventDefault(){}});
+ const held=ids.get('joystick-stick').style.transform;events.resize();assert.equal(ids.get('joystick-stick').style.transform,held,'unchanged dimensions must preserve movement');
+ window.innerWidth=844;window.innerHeight=390;events.resize();
+ assert.equal(ids.get('canvas').width,844);assert.equal(ids.get('canvas').height,390);
+ assert.equal(ids.get('joystick-stick').style.transform,'translate(calc(-50% + 0px),calc(-50% + 0px))');
+ assert.match(ids.get('battle-help').textContent,/일시정지/);
+ const rotatedSave=storage.getItem('babel-mobile-v1'),updateBeforeRotation=Game.prototype.update;let rotationUpdates=0;
+ Game.prototype.update=function(...args){rotationUpdates++;return updateBeforeRotation.apply(this,args);};
+ try{frame(performance.now()+1000);assert.equal(rotationUpdates,0);assert.equal(storage.getItem('babel-mobile-v1'),rotatedSave);
+  events.pointermove({pointerId:30,clientX:200,clientY:200,preventDefault(){}});assert.equal(ids.get('joystick-stick').style.transform,'translate(calc(-50% + 0px),calc(-50% + 0px))');
+  window.innerWidth=390;window.innerHeight=844;events.resize();
+  pad.listeners.pointerdown({pointerId:31,pointerType:'touch',button:0,clientX:350,clientY:715,preventDefault(){}});events.pointerup({pointerId:31});frame(performance.now()+1200);assert.ok(rotationUpdates>0,'fresh touch resumes combat');
+ }finally{Game.prototype.update=updateBeforeRotation;}
  storage.failNext=true;events.blur();assert.match(ids.get('battle-help').textContent,/저장 실패/);assert.equal(ids.get('battle-help').hidden,false);assert.ok(ids.get('retry-save'));assert.ok(ids.get('pending-save-export'));assert.equal(ids.get('save-banner').hidden,false);ids.get('retry-save').click();assert.equal(ids.get('save-banner').hidden,true);assert.match(ids.get('battle-help').textContent,/저장 완료/);
  pad.listeners.pointerdown({pointerId:4,pointerType:'touch',button:0,clientX:350,clientY:715,preventDefault(){}});events.pointerup({pointerId:4});assert.equal(ids.get('battle-help').hidden,true);
  // Hidden frames cannot advance time even if visibilitychange has not arrived yet.
@@ -67,7 +82,7 @@ test('mobile menus, paid preview, presets, automatic combat and result page are 
   pair[0].hp=bossState[0].hp;pair[1].hp=0;refreshHud();assert.equal(ids.get('boss-hud-2').hidden,true);assert.equal(ids.get('boss-direction-2').hidden,true);assert.equal(ids.get('boss-hud').hidden,false);
   Object.assign(pair[0],{x:previewGame.player.x,y:previewGame.player.y});refreshHud();assert.equal(ids.get('boss-direction').hidden,true,'onscreen boss needs no edge cue');
   pair.forEach((b,i)=>Object.assign(b,bossState[i]));hudOnly=false;
-  events.blur();assert.equal(ids.get('battle-help').hidden,false);assert.match(ids.get('battle-help').textContent,/일시정지/);const pausedAt=previewGame.time;frame(previewNow+1000);assert.equal(previewGame.time,pausedAt);assert.deepEqual(storage.data,allSaved);
+  window.innerWidth=844;window.innerHeight=390;events.resize();assert.deepEqual(storage.data,allSaved,'preview rotation must not overwrite the saved run');window.innerWidth=390;window.innerHeight=844;events.resize();events.blur();assert.equal(ids.get('battle-help').hidden,false);assert.match(ids.get('battle-help').textContent,/일시정지/);const pausedAt=previewGame.time;frame(previewNow+1000);assert.equal(previewGame.time,pausedAt);assert.deepEqual(storage.data,allSaved);
   ids.get('battle-results').click();assert.ok(ids.get('result-page').innerHTML.includes('미리보기 · 일시정지'));assert.equal(document.activeElement,ids.get('result-page'));assert.ok(!ids.get('result-page').innerHTML.includes('id="dialog-title"'));ids.get('preview-continue').click();assert.equal(ids.get('battle-help').hidden,true);assert.equal(ids.get('battle').hidden,false);ids.get('battle-results').click();
   let previewExport;URL.createObjectURL=blob=>{previewExport=blob;return 'blob:preview';};ids.get('preview-diagnostics').click();URL.createObjectURL=createUrl;assert.equal(JSON.parse(await previewExport.text()).preview,true);
   ids.get('preview-home').click();assert.deepEqual(storage.data,allSaved);assert.equal(ids.get('resume').hidden,false);assert.equal(ids.get('lobby-header').hidden,false);assert.equal(document.activeElement,ids.get('start'));

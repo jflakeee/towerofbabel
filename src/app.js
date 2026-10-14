@@ -236,7 +236,11 @@ function updateHud(){
  const tray=Object.entries(game.skills).filter(([,lv])=>lv>0).map(([id,lv])=>{const s=SKILLS.find(s=>s.id===id);return `<div class="skill-chip" aria-label="${s.name} 레벨 ${lv}">${svg(s.icon)}<small>${lv}</small></div>`;}).join('');if($('skill-tray').innerHTML!==tray)$('skill-tray').innerHTML=tray;
 }
 function resize(){w=window.innerWidth;h=window.innerHeight;dpr=profile.settings.quality==='low'?1:Math.min(window.devicePixelRatio||1,2);$('canvas').width=Math.floor(w*dpr);$('canvas').height=Math.floor(h*dpr);zoom=clamp(w/490,.65,1.25);if(w>h)zoom=clamp(h/560,.6,1);}
-window.addEventListener('resize',()=>{diagnostics.interrupt();resetInput();resize();if(game)draw();});
+window.addEventListener('resize',()=>{
+ const dimensionsChanged=w!==window.innerWidth||h!==window.innerHeight;
+ if(dimensionsChanged){diagnostics.interrupt();resetInput();pauseGame();}
+ resize();if(game)draw();
+});
 function loop(now){
  if(document.hidden&&game&&['playing','choosing'].includes(game.state)&&!paused)pauseGame();
  const dt=Math.min(Math.max(0,(now-lastTime)/1000),.2);lastTime=now;
