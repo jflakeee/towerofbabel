@@ -112,3 +112,12 @@ test('next guardian is at least 1000 from the real kill and player positions eve
   Object.assign(restored.player,target);restored.update(.01);assert.deepEqual({x:restored.currentBoss().x,y:restored.currentBoss().y},target);
  }
 });
+
+test('older saves awaiting the next guardian gain a persistent 1000-distance waypoint on resume',()=>{
+ const {p,g}=make();Object.assign(g.player,gateLocation(1));const boss=g.spawn('boss');g.damageEnemy(boss,1e9);
+ const next=advanceStage(p,g,()=>{}).game,snapshot=next.snapshot();delete snapshot.exploration.next;delete snapshot.exploration.departure;
+ const restored=Game.restore(p,snapshot),target=nextGateLocation(restored);
+ assert.ok(Math.hypot(target.x-restored.player.x,target.y-restored.player.y)>=1000);
+ assert.ok(Math.hypot(target.x-restored.exploration.previous.x,target.y-restored.exploration.previous.y)>=1000);
+ assert.ok(restored.exploration.departure);assert.deepEqual(nextGateLocation(Game.restore(p,restored.snapshot())),target);
+});
