@@ -1,4 +1,4 @@
-import {exploring,newExploration,validExploration,gateLocation,areaScale,areaLevel,worldView,setWorldView,releaseOutsideView,canActivateGate} from './exploration.js';
+import {exploring,newExploration,validExploration,gateLocation,areaScale,areaLevel,worldView,setWorldView,releaseOutsideView,canActivateGate,nextGateLocation,gateAfterClear} from './exploration.js';
 import {normalizeItem,rollOption,itemStats,defaultAutomation,normalizeAutomation,normalizeMaterials,GEM_DEFS,gemKey,ITEM_BASES,ITEM_PREFIXES} from './content.js';
 import {DIFFICULTIES,defaultJourney,normalizeJourney,gameObstacles,moveEntity,clearLine,firstWallTime,segmentCircleTime,safeSpawn,pursue} from './world.js';
 export const FLOORS = [
@@ -141,7 +141,7 @@ export class Game {
   game.fortune=previous.fortune+(newGear.fortune-oldGear.fortune)/100;
   game.rng.setState(previous.rng.getState());game.lootRng.setState(previous.lootRng.getState());
   if(exploring(previous)){
-   game.exploration={gate:previous.exploration.gate+1,previous:previous.exploration.previous||gateLocation(previous.exploration.gate),departure:{x:previous.player.x,y:previous.player.y}};
+   game.exploration={gate:previous.exploration.gate+1,previous:previous.exploration.previous||gateLocation(previous.exploration.gate),departure:{x:previous.player.x,y:previous.player.y},next:gateAfterClear(previous)};
    for(const key of ['x','y'])game.player[key]=previous.player[key];
    for(const key of ['id','spawnClock','projectiles','enemyShots','effects','texts'])game[key]=structuredClone(previous[key]);
    game.enemies=structuredClone(previous.enemies.filter(e=>e.hp>0&&e.type!=='boss'));for(const e of game.enemies)delete e.route;
@@ -177,7 +177,7 @@ export class Game {
  spawn(kind){
   const boss=kind==='boss',elite=kind==='elite',angle=this.rng()*Math.PI*2,p=this.player;
   let x=clamp(p.x+Math.cos(angle)*(boss?310:420+this.rng()*100),40,1560),y=clamp(p.y+Math.sin(angle)*(boss?310:420+this.rng()*100),40,1560);
-  if(exploring(this)){const v=worldView(this);if(boss){({x,y}=gateLocation(this.exploration.gate));}else{x=p.x+Math.cos(angle)*Math.max(60,v.x-30);y=p.y+Math.sin(angle)*Math.max(60,v.y-30);}}
+  if(exploring(this)){const v=worldView(this);if(boss){({x,y}=nextGateLocation(this));}else{x=p.x+Math.cos(angle)*Math.max(60,v.x-30);y=p.y+Math.sin(angle)*Math.max(60,v.y-30);}}
   const f=exploring(this)?Math.min(5,areaLevel({x,y})):this.floor,progress=exploring(this)?0:this.time/this.duration,composition=[[.22,.3],[.28,.35],[.18,.5],[.32,.4],[.35,.5]][f-1],type=kind|| (this.rng()<composition[0]?'runner':this.rng()<composition[1]?'caster':'grunt');
   const hp=boss?650+f*250:elite?100+f*50: (type==='runner'?18:28)*(1+f*.25+progress*.7);
   const difficulty=DIFFICULTIES[this.difficulty],scale=exploring(this)?areaScale({x,y}):(this.mode==='chaos'?1+(this.depth-1)*.08:1);

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Game,defaultProfile} from '../src/engine.js';
 import {prepareRun,advanceStage} from '../src/transactions.js';
-import {ORIGIN,gateLocation,residentMap,setWorldView,releaseOutsideView,areaScale,explorationGuides} from '../src/exploration.js';
+import {ORIGIN,gateLocation,residentMap,setWorldView,releaseOutsideView,areaScale,explorationGuides,nextGateLocation} from '../src/exploration.js';
 import {isWalkable,moveEntity} from '../src/world.js';
 const make=()=>{const p=defaultProfile(),g=new Game(p,{seed:41,exploration:true});g.spawnClock=g.attackClock=999;return {p,g};};
 test('new and legacy resumed journeys use exploration without spending twice or resetting growth',()=>{
@@ -81,7 +81,7 @@ test('wide view never activates the next guardian while stationary at the cleare
  for(let i=0;i<120;i++)next.update(.05);
  assert.equal(next.currentBoss(),null);assert.ok(next.exploration.departure);
  const restored=Game.restore(p,next.snapshot());assert.deepEqual(restored.exploration.departure,next.exploration.departure);
- Object.assign(restored.player,gateLocation(2));restored.update(.01);assert.equal(restored.livingBosses().length,1);assert.equal(restored.exploration.departure,null);
+ Object.assign(restored.player,nextGateLocation(restored));restored.update(.01);assert.equal(restored.livingBosses().length,1);assert.equal(restored.exploration.departure,null);
  restored.update(.01);assert.equal(restored.livingBosses().length,1);
 });
 test('a guardian chased to the next waypoint cannot cause an instant replacement on clear or reload',()=>{
@@ -90,9 +90,25 @@ test('a guardian chased to the next waypoint cannot cause an instant replacement
  const next=advanceStage(p,g,()=>{}).game;next.spawnClock=next.attackClock=999;
  const resumed=Game.restore(p,next.snapshot());resumed.update(.01);assert.equal(resumed.currentBoss(),null);
  resumed.player.x=point.x+300;resumed.update(.01);assert.equal(resumed.currentBoss(),null);assert.equal(resumed.exploration.departure,null);
- Object.assign(resumed.player,point);resumed.update(.01);assert.equal(resumed.livingBosses().length,1);
+ Object.assign(resumed.player,nextGateLocation(resumed));resumed.update(.01);assert.equal(resumed.livingBosses().length,1);
 });
 test('initial guardian waits for proximity even when its waypoint is visible on a large display',()=>{
  const {g}=make();setWorldView(g,1600,1600);g.update(.01);assert.equal(g.currentBoss(),null);
  Object.assign(g.player,gateLocation(1));g.player.x-=159;g.update(.01);assert.equal(g.livingBosses().length,1);
+});
+
+test('next guardian is at least 1000 from the real kill and player positions even after long chases',()=>{
+ for(const position of [{x:800,y:800},{x:20000,y:-12000},{x:-7000,y:-31000}]){
+  const {p,g}=make();Object.assign(g.player,position);const boss=g.spawn('boss');Object.assign(boss,{x:position.x+200,y:position.y-150});g.damageEnemy(boss,1e9);
+  const cleared={x:boss.x,y:boss.y},before=structuredClone(p);
+  assert.equal(advanceStage(p,g,()=>{throw Error('quota');}).ok,false);assert.deepEqual(p,before);
+  const next=advanceStage(p,g,()=>{}).game,target=nextGateLocation(next);
+  assert.ok(Math.hypot(target.x-position.x,target.y-position.y)>=1000);
+  assert.ok(Math.hypot(target.x-cleared.x,target.y-cleared.y)>=1000);
+  assert.ok(isWalkable(next,target.x,target.y,35));
+  assert.deepEqual(explorationGuides(next).find(m=>m.id==='next-gate-direction').point,target);
+  const restored=Game.restore(p,next.snapshot());assert.deepEqual(nextGateLocation(restored),target);
+  assert.deepEqual(nextGateLocation(advanceStage(p,g,()=>{}).game),target);
+  Object.assign(restored.player,target);restored.update(.01);assert.deepEqual({x:restored.currentBoss().x,y:restored.currentBoss().y},target);
+ }
 });
