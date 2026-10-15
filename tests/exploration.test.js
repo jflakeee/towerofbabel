@@ -73,3 +73,26 @@ test('guardian regeneration at the same coordinate has the same stats regardless
  }
  assert.deepEqual(samples[0],samples[1]);assert.deepEqual(samples[1],samples[2]);
 });
+
+test('wide view never activates the next guardian while stationary at the cleared location',()=>{
+ const {p,g}=make();setWorldView(g,1600,1600);Object.assign(g.player,gateLocation(1));
+ const boss=g.spawn('boss');g.damageEnemy(boss,1e9);const next=advanceStage(p,g,()=>{}).game;
+ setWorldView(next,1600,1600);next.spawnClock=next.attackClock=999;
+ for(let i=0;i<120;i++)next.update(.05);
+ assert.equal(next.currentBoss(),null);assert.ok(next.exploration.departure);
+ const restored=Game.restore(p,next.snapshot());assert.deepEqual(restored.exploration.departure,next.exploration.departure);
+ Object.assign(restored.player,gateLocation(2));restored.update(.01);assert.equal(restored.livingBosses().length,1);assert.equal(restored.exploration.departure,null);
+ restored.update(.01);assert.equal(restored.livingBosses().length,1);
+});
+test('a guardian chased to the next waypoint cannot cause an instant replacement on clear or reload',()=>{
+ const {p,g}=make(),point=gateLocation(2);Object.assign(g.player,point);
+ const boss=g.spawn('boss');Object.assign(boss,point);g.damageEnemy(boss,1e9);
+ const next=advanceStage(p,g,()=>{}).game;next.spawnClock=next.attackClock=999;
+ const resumed=Game.restore(p,next.snapshot());resumed.update(.01);assert.equal(resumed.currentBoss(),null);
+ resumed.player.x=point.x+300;resumed.update(.01);assert.equal(resumed.currentBoss(),null);assert.equal(resumed.exploration.departure,null);
+ Object.assign(resumed.player,point);resumed.update(.01);assert.equal(resumed.livingBosses().length,1);
+});
+test('initial guardian waits for proximity even when its waypoint is visible on a large display',()=>{
+ const {g}=make();setWorldView(g,1600,1600);g.update(.01);assert.equal(g.currentBoss(),null);
+ Object.assign(g.player,gateLocation(1));g.player.x-=159;g.update(.01);assert.equal(g.livingBosses().length,1);
+});
