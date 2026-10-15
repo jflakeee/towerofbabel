@@ -6,8 +6,8 @@ export const radialDistance=point=>Math.hypot(point.x-ORIGIN.x,point.y-ORIGIN.y)
 export const areaLevel=point=>1+Math.floor(radialDistance(point)/900);
 export const areaScale=point=>1+radialDistance(point)/1800;
 export function gateLocation(index){const angle=(index-1)*.65,radius=index*900;return {x:ORIGIN.x+Math.cos(angle)*radius,y:ORIGIN.y+Math.sin(angle)*radius};}
-export function newExploration(){return {gate:1,previous:null,departure:null};}
-export function validExploration(value){return value&&Number.isSafeInteger(value.gate)&&value.gate>=1&&value.gate<=100000&&(value.previous===null||value.previous&&['x','y'].every(k=>Number.isFinite(value.previous[k])&&Math.abs(value.previous[k])<=1e8))&&(value.departure==null||['x','y'].every(k=>Number.isFinite(value.departure[k])&&Math.abs(value.departure[k])<=1e8));}
+export function newExploration(){return {gate:1,previous:null,departure:null,next:null};}
+export function validExploration(value){return value&&Number.isSafeInteger(value.gate)&&value.gate>=1&&value.gate<=100000&&(value.previous===null||value.previous&&['x','y'].every(k=>Number.isFinite(value.previous[k])&&Math.abs(value.previous[k])<=1e8))&&(value.next==null||['x','y'].every(k=>Number.isFinite(value.next[k])&&Math.abs(value.next[k])<=1e8))&&(value.departure==null||['x','y'].every(k=>Number.isFinite(value.departure[k])&&Math.abs(value.departure[k])<=1e8));}
 export function setWorldView(game,halfWidth,halfHeight){views.set(game,{x:Math.max(100,Math.min(1600,halfWidth)),y:Math.max(100,Math.min(1600,halfHeight))});}
 export function worldView(game){return views.get(game)||{x:300,y:650};}
 export function inView(game,point,pad=0){const v=worldView(game);return Math.abs(point.x-game.player.x)<=v.x+pad&&Math.abs(point.y-game.player.y)<=v.y+pad;}
@@ -35,7 +35,7 @@ export function releaseOutsideView(game){
 }
 export function explorationGuides(game){if(!exploring(game))return [];return [
  {id:'origin-direction',label:'시작점',point:ORIGIN},
- {id:'next-gate-direction',label:`다음 수문장 ${game.exploration.gate}`,point:game.currentBoss()||gateLocation(game.exploration.gate)},
+ {id:'next-gate-direction',label:`다음 수문장 ${game.exploration.gate}`,point:game.currentBoss()||nextGateLocation(game)},
  ...(game.exploration.previous?[{id:'previous-gate-direction',label:'이전 수문장 · 처치',point:game.exploration.previous}]:[])
  ];}
 
@@ -47,6 +47,19 @@ export function canActivateGate(game){
   if(Math.hypot(p.x-progress.departure.x,p.y-progress.departure.y)<240)return false;
   progress.departure=null;
  }
- const next=gateLocation(progress.gate);
+ const next=nextGateLocation(game);
  return Math.hypot(p.x-next.x,p.y-next.y)<=160&&inView(game,next,-40);
+}
+
+export const nextGateLocation=game=>game.exploration.next||gateLocation(game.exploration.gate);
+export function gateAfterClear(game){
+ const defeated=game.exploration.previous||nextGateLocation(game),p=game.player;
+ const minimumRadius=Math.max(radialDistance(p),radialDistance(defeated),radialDistance(nextGateLocation(game)))+1000;
+ const angle=game.exploration.gate*.65;
+ // Chunk corners stay clear of generated obstacles. Check after rounding so
+ // both the actual kill position and the player's position are >=1000 away.
+ for(let radius=minimumRadius+CHUNK_SIZE; ;radius+=CHUNK_SIZE){
+  const point={x:Math.round((ORIGIN.x+Math.cos(angle)*radius)/CHUNK_SIZE)*CHUNK_SIZE,y:Math.round((ORIGIN.y+Math.sin(angle)*radius)/CHUNK_SIZE)*CHUNK_SIZE};
+  if(radialDistance(point)>=minimumRadius&&Math.hypot(point.x-p.x,point.y-p.y)>=1000&&Math.hypot(point.x-defeated.x,point.y-defeated.y)>=1000)return point;
+ }
 }
