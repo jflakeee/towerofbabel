@@ -49,3 +49,27 @@ test('leaving a guardian unloads it, revisiting respawns it, but defeated guardi
 test('invalid exploration coordinates and progress cannot resume',()=>{
  const {p,g}=make(),snapshot=g.snapshot();for(const mutate of [s=>s.exploration.gate=0,s=>s.exploration.previous={x:NaN,y:0},s=>s.player.x=1e20,s=>s.exploration=null]){const value=structuredClone(snapshot);mutate(value);assert.equal(Game.restore(p,value),null);}
 });
+
+// Floor/theme rotation must never reset the radial difficulty of guardians.
+test('farther guardians keep increasing health and damage across floor and chaos rotations',()=>{
+ for(const difficulty of ['normal','hard','nightmare']){
+  let lastHp=0,lastDamage=0;
+  for(let gate=1;gate<=25;gate++){
+   const p=defaultProfile();p.journey.difficulty=difficulty;p.journey.unlockedDifficulty=2;
+   const g=new Game(p,{seed:9,exploration:true,floor:(gate-1)%5+1});g.exploration.gate=gate;
+   Object.assign(g.player,gateLocation(gate));const boss=g.spawn('boss');
+   assert.ok(boss.maxHp>lastHp,`${difficulty} gate ${gate} health must increase`);
+   assert.ok(boss.damage>lastDamage,`${difficulty} gate ${gate} damage must increase`);
+   lastHp=boss.maxHp;lastDamage=boss.damage;
+   const restored=Game.restore(p,g.snapshot());assert.ok(restored);assert.equal(restored.currentBoss().maxHp,lastHp);
+  }
+ }
+});
+test('guardian regeneration at the same coordinate has the same stats regardless of stage theme',()=>{
+ const samples=[];
+ for(const floor of [1,3,5]){
+  const g=new Game(defaultProfile(),{seed:5,exploration:true,floor});g.exploration.gate=7;
+  Object.assign(g.player,gateLocation(7));g.time=floor*100;const boss=g.spawn('boss');samples.push([boss.maxHp,boss.damage]);
+ }
+ assert.deepEqual(samples[0],samples[1]);assert.deepEqual(samples[1],samples[2]);
+});

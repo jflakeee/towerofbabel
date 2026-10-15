@@ -178,7 +178,7 @@ export class Game {
   const boss=kind==='boss',elite=kind==='elite',angle=this.rng()*Math.PI*2,p=this.player;
   let x=clamp(p.x+Math.cos(angle)*(boss?310:420+this.rng()*100),40,1560),y=clamp(p.y+Math.sin(angle)*(boss?310:420+this.rng()*100),40,1560);
   if(exploring(this)){const v=worldView(this);if(boss){({x,y}=gateLocation(this.exploration.gate));}else{x=p.x+Math.cos(angle)*Math.max(60,v.x-30);y=p.y+Math.sin(angle)*Math.max(60,v.y-30);}}
-  const f=exploring(this)&&!boss?Math.min(5,areaLevel({x,y})):this.floor,progress=exploring(this)?0:this.time/this.duration,composition=[[.22,.3],[.28,.35],[.18,.5],[.32,.4],[.35,.5]][f-1],type=kind|| (this.rng()<composition[0]?'runner':this.rng()<composition[1]?'caster':'grunt');
+  const f=exploring(this)?Math.min(5,areaLevel({x,y})):this.floor,progress=exploring(this)?0:this.time/this.duration,composition=[[.22,.3],[.28,.35],[.18,.5],[.32,.4],[.35,.5]][f-1],type=kind|| (this.rng()<composition[0]?'runner':this.rng()<composition[1]?'caster':'grunt');
   const hp=boss?650+f*250:elite?100+f*50: (type==='runner'?18:28)*(1+f*.25+progress*.7);
   const difficulty=DIFFICULTIES[this.difficulty],scale=exploring(this)?areaScale({x,y}):(this.mode==='chaos'?1+(this.depth-1)*.08:1);
   const enemy={id:++this.id,x,y,r:boss?35:elite?24:type==='runner'?12:16,hp,maxHp:hp,type,speed:boss?48:elite?62:type==='runner'?102: type==='caster'?46:60,damage:boss?18+f*3:elite?10+f:4+f*2,slow:0,hit:0,cooldown:boss?2.5:2+this.rng()*2,telegraph:0,targetX:0,targetY:0};
