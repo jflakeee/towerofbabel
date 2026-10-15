@@ -6,8 +6,8 @@ export const radialDistance=point=>Math.hypot(point.x-ORIGIN.x,point.y-ORIGIN.y)
 export const areaLevel=point=>1+Math.floor(radialDistance(point)/900);
 export const areaScale=point=>1+radialDistance(point)/1800;
 export function gateLocation(index){const angle=(index-1)*.65,radius=index*900;return {x:ORIGIN.x+Math.cos(angle)*radius,y:ORIGIN.y+Math.sin(angle)*radius};}
-export function newExploration(){return {gate:1,previous:null};}
-export function validExploration(value){return value&&Number.isSafeInteger(value.gate)&&value.gate>=1&&value.gate<=100000&&(value.previous===null||value.previous&&['x','y'].every(k=>Number.isFinite(value.previous[k])&&Math.abs(value.previous[k])<=1e8));}
+export function newExploration(){return {gate:1,previous:null,departure:null};}
+export function validExploration(value){return value&&Number.isSafeInteger(value.gate)&&value.gate>=1&&value.gate<=100000&&(value.previous===null||value.previous&&['x','y'].every(k=>Number.isFinite(value.previous[k])&&Math.abs(value.previous[k])<=1e8))&&(value.departure==null||['x','y'].every(k=>Number.isFinite(value.departure[k])&&Math.abs(value.departure[k])<=1e8));}
 export function setWorldView(game,halfWidth,halfHeight){views.set(game,{x:Math.max(100,Math.min(1600,halfWidth)),y:Math.max(100,Math.min(1600,halfHeight))});}
 export function worldView(game){return views.get(game)||{x:300,y:650};}
 export function inView(game,point,pad=0){const v=worldView(game);return Math.abs(point.x-game.player.x)<=v.x+pad&&Math.abs(point.y-game.player.y)<=v.y+pad;}
@@ -38,3 +38,15 @@ export function explorationGuides(game){if(!exploring(game))return [];return [
  {id:'next-gate-direction',label:`다음 수문장 ${game.exploration.gate}`,point:game.currentBoss()||gateLocation(game.exploration.gate)},
  ...(game.exploration.previous?[{id:'previous-gate-direction',label:'이전 수문장 · 처치',point:game.exploration.previous}]:[])
  ];}
+
+// Seeing a waypoint is not arrival. After a clear, require departure from the
+// player's settlement position before allowing the next guardian to activate.
+export function canActivateGate(game){
+ const progress=game.exploration,p=game.player;
+ if(progress.departure){
+  if(Math.hypot(p.x-progress.departure.x,p.y-progress.departure.y)<240)return false;
+  progress.departure=null;
+ }
+ const next=gateLocation(progress.gate);
+ return Math.hypot(p.x-next.x,p.y-next.y)<=160&&inView(game,next,-40);
+}

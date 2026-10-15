@@ -1,4 +1,4 @@
-import {exploring,newExploration,validExploration,gateLocation,areaScale,areaLevel,worldView,setWorldView,inView,releaseOutsideView} from './exploration.js';
+import {exploring,newExploration,validExploration,gateLocation,areaScale,areaLevel,worldView,setWorldView,releaseOutsideView,canActivateGate} from './exploration.js';
 import {normalizeItem,rollOption,itemStats,defaultAutomation,normalizeAutomation,normalizeMaterials,GEM_DEFS,gemKey,ITEM_BASES,ITEM_PREFIXES} from './content.js';
 import {DIFFICULTIES,defaultJourney,normalizeJourney,gameObstacles,moveEntity,clearLine,firstWallTime,segmentCircleTime,safeSpawn,pursue} from './world.js';
 export const FLOORS = [
@@ -141,7 +141,7 @@ export class Game {
   game.fortune=previous.fortune+(newGear.fortune-oldGear.fortune)/100;
   game.rng.setState(previous.rng.getState());game.lootRng.setState(previous.lootRng.getState());
   if(exploring(previous)){
-   game.exploration={gate:previous.exploration.gate+1,previous:previous.exploration.previous||gateLocation(previous.exploration.gate)};
+   game.exploration={gate:previous.exploration.gate+1,previous:previous.exploration.previous||gateLocation(previous.exploration.gate),departure:{x:previous.player.x,y:previous.player.y}};
    for(const key of ['x','y'])game.player[key]=previous.player[key];
    for(const key of ['id','spawnClock','projectiles','enemyShots','effects','texts'])game[key]=structuredClone(previous[key]);
    game.enemies=structuredClone(previous.enemies.filter(e=>e.hp>0&&e.type!=='boss'));for(const e of game.enemies)delete e.route;
@@ -228,7 +228,7 @@ export class Game {
   if(exploring(this))releaseOutsideView(this);
   this.spawnClock-=dt;
   if((exploring(this)||this.time<this.duration)&&this.spawnClock<=0&&this.enemies.length<100){const elite=this.time>=this.nextEliteAt;if(elite)this.nextEliteAt+=23;this.spawn(elite?'elite':undefined);this.spawnClock=exploring(this)?Math.max(.3,1.1/Math.sqrt(areaScale(p))):Math.max(.22,1.1-this.time*.006-this.floor*.07);}
-  if(this.encounter==='stage'&&!this.bossSpawned&&(exploring(this)?inView(this,gateLocation(this.exploration.gate),-40):this.time>=this.duration)){if(!exploring(this))p.hp=Math.min(p.maxHp,p.hp+p.maxHp*.2);this.spawn('boss');}
+  if(this.encounter==='stage'&&!this.bossSpawned&&(exploring(this)?canActivateGate(this):this.time>=this.duration)){if(!exploring(this))p.hp=Math.min(p.maxHp,p.hp+p.maxHp*.2);this.spawn('boss');}
   if(this.bossSpawned&&this.time>=this.timeLimit()&&this.state==='playing'){this.state='lost';this.event='lost';return;}
   this.attackClock-=dt;if(this.attackClock<=0){this.attack();this.attackClock=HEROES[this.hero].interval*Math.pow(.9,this.skills.haste||0)*Math.pow(.95,this.skills.focus||0)/(1+(this.gearStats.haste||0)/100);}
   if(this.state!=='playing')return;
