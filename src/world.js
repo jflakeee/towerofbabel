@@ -1,3 +1,4 @@
+import {exploring,residentMap} from './exploration.js';
 // Independent mobile content. Values are not claims about the benchmark's rules.
 export const DIFFICULTIES={normal:{name:'일반',hp:1,damage:1,speed:1,reward:1,loot:0},hard:{name:'어려움',hp:1.55,damage:1.3,speed:1.06,reward:1.6,loot:1},nightmare:{name:'악몽',hp:2.2,damage:1.6,speed:1.12,reward:2.3,loot:2}};
 export function defaultJourney(){return {difficulty:'normal',mode:'tower',chaosDepth:1,chaosMaxDepth:1,chaosBestCleared:0,unlockedDifficulty:0,chaosUnlocked:false};}
@@ -11,10 +12,10 @@ const FLOOR_MAPS=[
  [rect(470,470,160,55),rect(970,470,160,55),rect(470,1075,160,55),rect(970,1075,160,55),rect(300,720,55,160),rect(1245,720,55,160)]
  ];
 export function obstaclesFor(floor){return FLOOR_MAPS[Math.max(0,Math.min(4,floor-1))];}
-export const gameObstacles=game=>game.worldVersion===1?obstaclesFor(game.floor):[];
+export const gameObstacles=game=>exploring(game)?residentMap(game).obstacles:game.worldVersion===1?obstaclesFor(game.floor):[];
 export function overlaps(x,y,r,o){const dx=x-Math.max(o.x,Math.min(o.x+o.w,x)),dy=y-Math.max(o.y,Math.min(o.y+o.h,y));return dx*dx+dy*dy<r*r;}
-export function isWalkable(game,x,y,r=15){return x>=35&&x<=1565&&y>=35&&y<=1565&&!gameObstacles(game).some(o=>overlaps(x,y,r,o));}
-export function moveEntity(game,entity,dx,dy){const steps=Math.max(1,Math.ceil(Math.hypot(dx,dy)/5));for(let i=0;i<steps;i++){const x=Math.max(35,Math.min(1565,entity.x+dx/steps)),y=Math.max(35,Math.min(1565,entity.y+dy/steps));if(isWalkable(game,x,entity.y,entity.r))entity.x=x;if(isWalkable(game,entity.x,y,entity.r))entity.y=y;}return entity;}
+export function isWalkable(game,x,y,r=15){return (exploring(game)?Math.abs(x)<=1e8&&Math.abs(y)<=1e8:x>=35&&x<=1565&&y>=35&&y<=1565)&&!gameObstacles(game).some(o=>overlaps(x,y,r,o));}
+export function moveEntity(game,entity,dx,dy){const steps=Math.max(1,Math.ceil(Math.hypot(dx,dy)/5));for(let i=0;i<steps;i++){const x=exploring(game)?entity.x+dx/steps:Math.max(35,Math.min(1565,entity.x+dx/steps)),y=exploring(game)?entity.y+dy/steps:Math.max(35,Math.min(1565,entity.y+dy/steps));if(isWalkable(game,x,entity.y,entity.r))entity.x=x;if(isWalkable(game,entity.x,y,entity.r))entity.y=y;}return entity;}
 // First contact along a finite segment, normalized to [0, 1]. Infinity means no hit.
 export function segmentCircleTime(a,b,center,r){
  const dx=b.x-a.x,dy=b.y-a.y,ox=a.x-center.x,oy=a.y-center.y,c=ox*ox+oy*oy-r*r;

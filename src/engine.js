@@ -1,3 +1,4 @@
+import {exploring,newExploration,validExploration,gateLocation,areaScale,areaLevel,worldView,setWorldView,inView,releaseOutsideView} from './exploration.js';
 import {normalizeItem,rollOption,itemStats,defaultAutomation,normalizeAutomation,normalizeMaterials,GEM_DEFS,gemKey,ITEM_BASES,ITEM_PREFIXES} from './content.js';
 import {DIFFICULTIES,defaultJourney,normalizeJourney,gameObstacles,moveEntity,clearLine,firstWallTime,segmentCircleTime,safeSpawn,pursue} from './world.js';
 export const FLOORS = [
@@ -109,7 +110,7 @@ export class Game {
   if(options.encounter!==undefined&&!['stage','dual-boss'].includes(options.encounter))throw new Error('Unknown encounter');
   this.encounter=options.encounter||'stage';
   const seed=options.seed??Math.floor(Math.random()*4294967296);this.rng=options.rng||seededRandom(seed);this.lootRng=seededRandom(seed^0x9e3779b9);this.runId=options.runId||globalThis.crypto?.randomUUID?.()||`${Date.now().toString(36)}-${seed.toString(36)}-${++runSequence}`;this.lootCount=0;this.floor=options.floor||profile.selectedFloor;this.hero=options.hero||profile.selectedHero;
-  const journey=normalizeJourney(profile.journey);this.mode=journey.mode;this.difficulty=journey.difficulty;this.depth=journey.chaosDepth;if(this.mode==='chaos')this.floor=(this.depth-1)%5+1;this.worldVersion=1;this.appearance=Object.fromEntries(Object.keys(SLOT_NAMES).map(slot=>[slot,structuredClone(allItems(profile).find(i=>i.id===profile.equipped[slot])||null)]));this.materialLoot=[];this.materialCount=0;
+  const journey=normalizeJourney(profile.journey);this.mode=journey.mode;this.difficulty=journey.difficulty;this.depth=journey.chaosDepth;if(this.mode==='chaos')this.floor=(this.depth-1)%5+1;this.worldVersion=options.exploration&&this.encounter==='stage'?2:1;this.exploration=this.worldVersion===2?newExploration():null;this.appearance=Object.fromEntries(Object.keys(SLOT_NAMES).map(slot=>[slot,structuredClone(allItems(profile).find(i=>i.id===profile.equipped[slot])||null)]));this.materialLoot=[];this.materialCount=0;
   // Preview scaling uses verified progress, independent of the lobby stage selection.
   // Fixed floor-one content and the existing mobile chaos multiplier are not original-game balance values.
   this.arenaBestCleared=null;
@@ -128,7 +129,7 @@ export class Game {
   // Lobby edits apply to a fresh journey, never to the next stage of a saved run.
   const mode=previous.mode==='chaos'||previous.floor===5?'chaos':'tower';
   const journey={...profile.journey,mode,difficulty:previous.difficulty,chaosDepth:previous.mode==='chaos'?Math.min(20,previous.depth+1):1};
-  const game=new Game({...profile,journey},{hero:previous.hero,floor:Math.min(5,previous.floor+1)});
+  const game=new Game({...profile,journey},{hero:previous.hero,floor:Math.min(5,previous.floor+1),exploration:exploring(previous)});
   for(const key of ['regenClock','skills','level','xp','nextXp','pendingLevels','rerolls','automation','autoStrategy','attackClock','skillClocks','dashCd','novaCd','dashTime','dashDir'])game[key]=structuredClone(previous[key]);
   // Apply only the equipment difference; do not replay healing or level-up effects.
   const oldGear=previous.gearStats,newGear=game.gearStats;
@@ -139,6 +140,14 @@ export class Game {
   for(const key of ['speed','face','invulnerable'])game.player[key]=previous.player[key];
   game.fortune=previous.fortune+(newGear.fortune-oldGear.fortune)/100;
   game.rng.setState(previous.rng.getState());game.lootRng.setState(previous.lootRng.getState());
+  if(exploring(previous)){
+   game.exploration={gate:previous.exploration.gate+1,previous:previous.exploration.previous||gateLocation(previous.exploration.gate)};
+   for(const key of ['x','y'])game.player[key]=previous.player[key];
+   for(const key of ['id','spawnClock','projectiles','enemyShots','effects','texts'])game[key]=structuredClone(previous[key]);
+   game.enemies=structuredClone(previous.enemies.filter(e=>e.hp>0&&e.type!=='boss'));for(const e of game.enemies)delete e.route;
+   game.nextEliteAt=Math.max(0,previous.nextEliteAt-previous.time);
+   const view=worldView(previous);setWorldView(game,view.x,view.y);
+  }
   if(game.pendingLevels)game.offerChoices();
   return game;
  }
@@ -159,21 +168,23 @@ export class Game {
   if(snapshot.encounter!==undefined&&!['stage','dual-boss'].includes(snapshot.encounter))return null;
   if(snapshot.encounter==='dual-boss'&&(snapshot.duration!==300||snapshot.bossSpawned!==true||snapshot.enemies.filter(e=>e.type==='boss'&&e.hp>0).length<1||snapshot.enemies.filter(e=>e.type==='boss').length>2))return null;
   if(snapshot.arenaBestCleared!=null&&(!Number.isInteger(snapshot.arenaBestCleared)||snapshot.arenaBestCleared<0||snapshot.arenaBestCleared>20||snapshot.encounter!=='dual-boss'||snapshot.mode!=='chaos'||snapshot.floor!==1||snapshot.depth!==Math.max(1,snapshot.arenaBestCleared)))return null;
+  if(snapshot.worldVersion===2&&(snapshot.encounter!=='stage'||!validExploration(snapshot.exploration)||[snapshot.player,...snapshot.enemies,...snapshot.gems].some(e=>Math.abs(e.x)>1e8||Math.abs(e.y)>1e8)))return null;
   if(snapshot.regenClock!==undefined&&(!Number.isFinite(snapshot.regenClock)||snapshot.regenClock<0||snapshot.regenClock>=3))return null;
   const game=new Game(profile);game.difficulty='normal';game.mode='tower';game.depth=1;game.appearance={};for(const key of Object.keys(game)){if(!['rng','lootRng'].includes(key)&&snapshot[key]!==undefined)game[key]=snapshot[key];}if(Number.isInteger(snapshot.rngState))game.rng.setState(snapshot.rngState);if(Number.isInteger(snapshot.lootRngState))game.lootRng.setState(snapshot.lootRngState);game.automation=normalizeAutomation(game.automation);game.gearStats=game.gearStats&&typeof game.gearStats==='object'?game.gearStats:equippedStats(defaultProfile());for(const key of Object.keys(equippedStats(defaultProfile())))if(!Number.isFinite(game.gearStats?.[key]))game.gearStats[key]=0;
-  if(!['balanced','survival','attack','farming','custom'].includes(game.autoStrategy))game.autoStrategy='balanced';game.decisionLog=Array.isArray(game.decisionLog)?game.decisionLog.filter(d=>d&&typeof d.id==='string'&&typeof d.reason==='string').slice(-200):[];if(!DIFFICULTIES[game.difficulty])return null;if(!['tower','chaos'].includes(game.mode)||!Number.isInteger(game.depth)||game.depth<1||game.depth>20)return null;game.worldVersion=snapshot.worldVersion===1?1:0;game.appearance=Object.fromEntries(Object.keys(SLOT_NAMES).map(slot=>{const item=game.appearance?.[slot];return [slot,item&&item.slot===slot&&Number.isInteger(item.rarity)&&item.rarity>=0&&item.rarity<=4&&Number.isFinite(item.value)?normalizeItem(item):null];}));game.materialLoot=Array.isArray(game.materialLoot)?game.materialLoot.filter(g=>GEM_DEFS[g?.kind]&&Number.isInteger(g.tier)&&g.tier>=1&&g.tier<=3):[];game.skillClocks.meteor=Number.isFinite(game.skillClocks.meteor)?game.skillClocks.meteor:2;for(const entity of [game.player,...game.enemies])Object.assign(entity,safeSpawn(game,entity.x,entity.y,entity.r));game.event=null;game.effects=[];game.texts=[];return game;
+  if(!['balanced','survival','attack','farming','custom'].includes(game.autoStrategy))game.autoStrategy='balanced';game.decisionLog=Array.isArray(game.decisionLog)?game.decisionLog.filter(d=>d&&typeof d.id==='string'&&typeof d.reason==='string').slice(-200):[];if(!DIFFICULTIES[game.difficulty])return null;if(!['tower','chaos'].includes(game.mode)||!Number.isInteger(game.depth)||game.depth<1||game.depth>20)return null;game.worldVersion=[1,2].includes(snapshot.worldVersion)?snapshot.worldVersion:0;game.exploration=game.worldVersion===2?snapshot.exploration:null;game.appearance=Object.fromEntries(Object.keys(SLOT_NAMES).map(slot=>{const item=game.appearance?.[slot];return [slot,item&&item.slot===slot&&Number.isInteger(item.rarity)&&item.rarity>=0&&item.rarity<=4&&Number.isFinite(item.value)?normalizeItem(item):null];}));game.materialLoot=Array.isArray(game.materialLoot)?game.materialLoot.filter(g=>GEM_DEFS[g?.kind]&&Number.isInteger(g.tier)&&g.tier>=1&&g.tier<=3):[];game.skillClocks.meteor=Number.isFinite(game.skillClocks.meteor)?game.skillClocks.meteor:2;for(const entity of [game.player,...game.enemies])Object.assign(entity,safeSpawn(game,entity.x,entity.y,entity.r));game.event=null;game.effects=[];game.texts=[];return game;
  }
  snapshot(){const o={version:2,rngState:this.rng.getState?.(),lootRngState:this.lootRng.getState?.()};for(const k of Object.keys(this))if(!['rng','lootRng','event'].includes(k))o[k]=this[k];return JSON.parse(JSON.stringify(o));}
  spawn(kind){
   const boss=kind==='boss',elite=kind==='elite',angle=this.rng()*Math.PI*2,p=this.player;
-  const x=clamp(p.x+Math.cos(angle)*(boss?310:420+this.rng()*100),40,1560),y=clamp(p.y+Math.sin(angle)*(boss?310:420+this.rng()*100),40,1560);
-  const f=this.floor,progress=this.time/this.duration,composition=[[.22,.3],[.28,.35],[.18,.5],[.32,.4],[.35,.5]][f-1],type=kind|| (this.rng()<composition[0]?'runner':this.rng()<composition[1]?'caster':'grunt');
+  let x=clamp(p.x+Math.cos(angle)*(boss?310:420+this.rng()*100),40,1560),y=clamp(p.y+Math.sin(angle)*(boss?310:420+this.rng()*100),40,1560);
+  if(exploring(this)){const v=worldView(this);if(boss){({x,y}=gateLocation(this.exploration.gate));}else{x=p.x+Math.cos(angle)*Math.max(60,v.x-30);y=p.y+Math.sin(angle)*Math.max(60,v.y-30);}}
+  const f=exploring(this)&&!boss?Math.min(5,areaLevel({x,y})):this.floor,progress=exploring(this)?0:this.time/this.duration,composition=[[.22,.3],[.28,.35],[.18,.5],[.32,.4],[.35,.5]][f-1],type=kind|| (this.rng()<composition[0]?'runner':this.rng()<composition[1]?'caster':'grunt');
   const hp=boss?650+f*250:elite?100+f*50: (type==='runner'?18:28)*(1+f*.25+progress*.7);
-  const difficulty=DIFFICULTIES[this.difficulty],scale=this.mode==='chaos'?1+(this.depth-1)*.08:1;
+  const difficulty=DIFFICULTIES[this.difficulty],scale=exploring(this)?areaScale({x,y}):(this.mode==='chaos'?1+(this.depth-1)*.08:1);
   const enemy={id:++this.id,x,y,r:boss?35:elite?24:type==='runner'?12:16,hp,maxHp:hp,type,speed:boss?48:elite?62:type==='runner'?102: type==='caster'?46:60,damage:boss?18+f*3:elite?10+f:4+f*2,slow:0,hit:0,cooldown:boss?2.5:2+this.rng()*2,telegraph:0,targetX:0,targetY:0};
   enemy.hp*=difficulty.hp*scale;enemy.maxHp=enemy.hp;enemy.damage*=difficulty.damage*scale;enemy.speed*=difficulty.speed;Object.assign(enemy,safeSpawn(this,x,y,enemy.r));this.enemies.push(enemy);if(boss){this.bossId=enemy.id;this.bossSpawned=true;this.event='boss';}return enemy;
  }
- timeLimit(){return this.encounter==='dual-boss'?300:this.duration+60;}
+ timeLimit(){if(exploring(this))return Infinity;return this.encounter==='dual-boss'?300:this.duration+60;}
  timeRemaining(){return Math.max(0,this.timeLimit()-this.time);}
  livingBosses(){return this.enemies.filter(e=>e.type==='boss'&&e.hp>0);}
  currentBoss(){const bosses=this.livingBosses();return bosses.find(e=>e.id===this.bossId)||bosses[0]||null;}
@@ -187,7 +198,7 @@ export class Game {
   if(this.texts.length<35)this.texts.push({x:e.x,y:e.y-18,text:String(Math.round(dmg)),color:crit?'#e8c67d':'#c8d4c7',life:.6,maxLife:.6});
   if(e.hp<=0){this.kills++;if(this.kills%15===0&&this.player.hp>0){this.player.hp=Math.min(this.player.maxHp,this.player.hp+12);this.addEffect('ring',this.player.x,this.player.y,40,'#86b9aa',.4);}this.gold+=Math.round((e.type==='boss'?25:e.type==='elite'?10:1)*this.fortune*DIFFICULTIES[this.difficulty].reward*(this.mode==='chaos'?1+this.depth*.05:1));this.gems.push({x:e.x,y:e.y,value:e.type==='elite'?6:1});
    if(e.type==='elite'){this.loot.push(this.rollLoot());this.rollMaterial();}
-   if(e.type==='boss'){this.rollMaterial(true);this.loot.push(this.rollLoot(true));this.bossId=this.currentBoss()?.id||null;if(!this.livingBosses().length&&this.player.hp>0&&this.state==='playing'){this.state='won';this.event='won';}}
+   if(e.type==='boss'){if(exploring(this))this.exploration.previous={x:e.x,y:e.y};this.rollMaterial(true);this.loot.push(this.rollLoot(true));this.bossId=this.currentBoss()?.id||null;if(!this.livingBosses().length&&this.player.hp>0&&this.state==='playing'){this.state='won';this.event='won';}}
    this.addEffect('death',e.x,e.y,e.r,'#8ea899',.35);
   }
  }
@@ -214,9 +225,10 @@ export class Game {
   const mag=Math.hypot(input.x,input.y),mx=mag>1?input.x/mag:input.x,my=mag>1?input.y/mag:input.y;
   if(mag>.05)p.face=Math.atan2(my,mx);
   moveEntity(this,p,(this.dashTime>0?this.dashDir.x*670:mx*p.speed)*dt,(this.dashTime>0?this.dashDir.y*670:my*p.speed)*dt);if(this.gearStats.regen)p.hp=Math.min(p.maxHp,p.hp+p.maxHp*.005*dt);
+  if(exploring(this))releaseOutsideView(this);
   this.spawnClock-=dt;
-  if(this.time<this.duration&&this.spawnClock<=0&&this.enemies.length<100){const elite=this.time>=this.nextEliteAt;if(elite)this.nextEliteAt+=23;this.spawn(elite?'elite':undefined);this.spawnClock=Math.max(.22,1.1-this.time*.006-this.floor*.07);}
-  if(this.encounter==='stage'&&this.time>=this.duration&&!this.bossSpawned){this.enemies=[];this.enemyShots=[];p.hp=Math.min(p.maxHp,p.hp+p.maxHp*.2);this.spawn('boss');}
+  if((exploring(this)||this.time<this.duration)&&this.spawnClock<=0&&this.enemies.length<100){const elite=this.time>=this.nextEliteAt;if(elite)this.nextEliteAt+=23;this.spawn(elite?'elite':undefined);this.spawnClock=exploring(this)?Math.max(.3,1.1/Math.sqrt(areaScale(p))):Math.max(.22,1.1-this.time*.006-this.floor*.07);}
+  if(this.encounter==='stage'&&!this.bossSpawned&&(exploring(this)?inView(this,gateLocation(this.exploration.gate),-40):this.time>=this.duration)){if(!exploring(this))p.hp=Math.min(p.maxHp,p.hp+p.maxHp*.2);this.spawn('boss');}
   if(this.bossSpawned&&this.time>=this.timeLimit()&&this.state==='playing'){this.state='lost';this.event='lost';return;}
   this.attackClock-=dt;if(this.attackClock<=0){this.attack();this.attackClock=HEROES[this.hero].interval*Math.pow(.9,this.skills.haste||0)*Math.pow(.95,this.skills.focus||0)/(1+(this.gearStats.haste||0)/100);}
   if(this.state!=='playing')return;
