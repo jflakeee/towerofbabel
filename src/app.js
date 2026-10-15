@@ -1,3 +1,4 @@
+import {exploring,ORIGIN,gateLocation,areaLevel,radialDistance,setWorldView,explorationGuides} from './exploration.js';
 const BUILD_TIME='__BUILD_TIME__';
 const buildLabel=BUILD_TIME.startsWith('__')?'개발 실행 · 빌드 전':new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(BUILD_TIME))+' KST';
 import {Game,FLOORS,BOSS_PATTERNS,HEROES,SKILLS,UPGRADES,SLOT_NAMES,RARITIES,defaultProfile,loadProfile,equippedStats,costFor,clamp,allItems,organizeInventory,recordedSkills} from './engine.js';
@@ -38,7 +39,7 @@ function sound(type){
 function musicTick(dt){if(!profile.settings.sound||!profile.settings.music||!audio||audio.state!=='running')return;musicClock+=dt;if(musicClock<.55)return;musicClock=0;const notes=[0,7,3,10,7,12,3,7],base=[130.81,146.83,164.81,174.61,196][game.floor-1];try{const osc=audio.createOscillator(),gain=audio.createGain(),time=audio.currentTime;osc.type='triangle';osc.frequency.value=base*Math.pow(2,notes[musicStep++%notes.length]/12);gain.gain.setValueAtTime(.001,time);gain.gain.linearRampToValueAtTime(.008,time+.08);gain.gain.exponentialRampToValueAtTime(.001,time+.48);osc.connect(gain);gain.connect(audio.destination);osc.start(time);osc.stop(time+.5);}catch{}}
 function renderHome(){
  $('gold').textContent=profile.gold.toLocaleString();$('floors').innerHTML=FLOORS.map((f,i)=>`<button class="floor ${profile.selectedFloor===i+1?'active':''} ${i+1>profile.unlocked?'locked':''}" data-floor="${i+1}" ${i+1>profile.unlocked?'disabled':''} aria-label="${i+1}층 ${esc(f.name)} ${i+1>profile.unlocked?'잠김':''}" aria-pressed="${profile.selectedFloor===i+1}">${i+1>profile.unlocked?'◇':String(i+1).padStart(2,'0')}<small>${i+1>profile.unlocked?'':'F'}</small></button>`).join('');
- $('floor-name').textContent=FLOORS[profile.selectedFloor-1].name;$('floor-desc').textContent=`${DIFFICULTIES[profile.journey.difficulty].name} · ${profile.journey.mode==='chaos'?'혼돈 '+profile.journey.chaosDepth+'단계':profile.selectedFloor+'층'} · 90초 생존`;
+ $('floor-name').textContent=FLOORS[profile.selectedFloor-1].name;$('floor-desc').textContent=`${DIFFICULTIES[profile.journey.difficulty].name} · ${profile.journey.mode==='chaos'?'혼돈 '+profile.journey.chaosDepth+'단계':profile.selectedFloor+'층'} · 거리 기반 탐험`;
  $('classes').innerHTML=Object.entries(HEROES).map(([id,v])=>`<button class="class-card ${id===profile.selectedHero?'active':''}" data-hero="${id}" aria-pressed="${id===profile.selectedHero}">${svg(v.icon)}<strong>${v.name}</strong><small>${v.role}</small></button>`).join('');
  $('gear-summary').textContent=allItems(profile).length?`보유 장비 ${allItems(profile).length}개 · 장착 ${Object.values(profile.equipped).filter(Boolean).length}/3`:'획득한 장비로 더 강하게';
  $('upgrade-summary').textContent=`영구 강화 ${Object.values(profile.upgrades).reduce((a,b)=>a+b,0)}단계`;
@@ -128,7 +129,7 @@ function beginBattle(resume=false){
  storageAvailable=true;$('result-page').hidden=true;closeModal();showLobby(false);
 
  diagnostics.start({build:BUILD_TIME,width:window.innerWidth,height:window.innerHeight,quality:profile.settings.quality,resumed:resume});stepAccumulator=0;paused=false;$('battle').hidden=false;document.body.style.overflow='hidden';resize();applyControls();lastTime=performance.now();saveClock=0;hudClock=0;updateHud();draw();cancelAnimationFrame(raf);raf=requestAnimationFrame(loop);sound('start');
- if(game.state==='choosing')showChoices();else if(isArenaPreview())announce('투기장 미리보기 · 보스 2체 · 5분');else announce(`${String(game.floor).padStart(2,'0')}F · ${FLOORS[game.floor-1].name}`);
+ if(game.state==='choosing')showChoices();else if(isArenaPreview())announce('투기장 미리보기 · 보스 2체 · 5분');else if(exploring(game))announce('시작점에서 출발 · 수문장 화살표를 따라 탐험');else announce(`${String(game.floor).padStart(2,'0')}F · ${FLOORS[game.floor-1].name}`);
  $('battle-results').textContent=isArenaPreview()?'미리보기 상태 · 종료':'전투 결과 확인';$('battle-results').focus();
  $('battle-help').textContent='화면 어디든 드래그해 이동 · 나머지는 자동';$('battle-help').hidden=false;setTimeout(()=>{if(!paused)$('battle-help').hidden=true;},6000);const starter=game.decisionLog.find(d=>d.source==='starting');$('auto-status').textContent=starter?`시작 스킬 · ${SKILLS.find(s=>s.id===starter.id)?.name}`:`자동 선택 성향 · ${STRATEGIES[game.autoStrategy]||'균형'}`;
 }
@@ -192,10 +193,10 @@ function finishGame(){
  if(!settled.ok){showResultPage(`<h2 id="dialog-title">보상 저장 대기</h2><p>${esc(settled.error)}<br>저장에 성공하면 계속 진행합니다.</p><button id="retry-reward" class="primary">저장 후 계속</button><button id="export-pending" class="secondary">미정산 결과 백업</button>`);$('retry-reward').onclick=finishGame;$('export-pending').onclick=()=>{const backup=continuousRunBackup(profile,game);if(backup.ok)exportSave(backup.profile,'babel-pending-reward.json');else toast(backup.error);};return;}
  renderHome();sound(won?'win':'hit');
  if(won){
-  game=settled.game;storageAvailable=true;resumeBattle();modalKind='';$('result-page').hidden=true;$('battle').hidden=false;document.body.style.overflow='hidden';
+  game=settled.game;resize();storageAvailable=true;resumeBattle();modalKind='';$('result-page').hidden=true;$('battle').hidden=false;document.body.style.overflow='hidden';
   diagnostics.start({build:BUILD_TIME,width:window.innerWidth,height:window.innerHeight,quality:profile.settings.quality,resumed:false});
   stepAccumulator=0;saveClock=0;hudClock=0;lastTime=performance.now();updateHud();
-  announce(`자동 장착 완료 · ${game.mode==='chaos'?'혼돈 '+game.depth+'단계':game.floor+'층'} 시작`);
+  announce(exploring(game)?'수문장 처치 · 자동 장착 완료 · 다음 위치로 탐험':`자동 장착 완료 · ${game.mode==='chaos'?'혼돈 '+game.depth+'단계':game.floor+'층'} 시작`);
   $('battle-results').textContent='전투 결과 확인 · 새 결과';
  }else showBattleResults();
 }
@@ -217,7 +218,7 @@ function announce(message){$('announcement').textContent=message;$('announcement
 function formatTime(seconds){return `${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(Math.floor(seconds%60)).padStart(2,'0')}`;}
 function updateHud(){
  if(!game)return;const p=game.player;$('hp-fill').style.width=`${p.hp/p.maxHp*100}%`;$('hp-text').textContent=`${Math.ceil(p.hp)} / ${p.maxHp}`;$('xp-fill').style.width=`${game.xp/game.nextXp*100}%`;$('level').textContent=`LV.${game.level}`;$('b-floor').textContent=`${String(game.floor).padStart(2,'0')}F`;$('b-name').textContent=isArenaPreview()?'투기장 미리보기':(game.mode==='chaos'?'혼돈 '+game.depth+' · ':'')+FLOORS[game.floor-1].name;$('kills').textContent=game.kills;$('run-gold').textContent=isArenaPreview()?'미지급':game.gold;
- $('timer').textContent=game.bossSpawned?`보스 제한 ${formatTime(game.timeRemaining())}`:`${formatTime(game.time)} / ${formatTime(game.duration)}`;
+ $('timer').textContent=exploring(game)?`시작점 ${Math.round(radialDistance(p))}m · 위험 ${areaLevel(p)}`:game.bossSpawned?`보스 제한 ${formatTime(game.timeRemaining())}`:`${formatTime(game.time)} / ${formatTime(game.duration)}`;
  const bosses=game.livingBosses(),dual=isArenaPreview(),tracked=dual?bossSlots.map(id=>bosses.find(b=>b.id===id)):[game.currentBoss()],markers=[];
  for(let i=0;i<2;i++){
   const suffix=i?'-2':'',boss=tracked[i],row=$('boss-hud'+suffix),marker=$('boss-direction'+suffix),label=dual?`보스 ${i+1}`:BOSS_PATTERNS[game.floor-1].name;
@@ -225,12 +226,13 @@ function updateHud(){
   const percent=clamp(boss.hp/boss.maxHp*100,0,100);
   $('boss-fill'+suffix).style.width=`${percent}%`;row.querySelector('span').textContent=`${label} · ${Math.ceil(percent)}%${percent<=40?' · 분노':''}`;
   const dx=(boss.x-p.x)*zoom,dy=(boss.y-p.y)*zoom,rx=Math.max(30,w/2-45),ry=Math.max(30,h/2-70);
-  if(['playing','choosing'].includes(game.state)&&(Math.abs(dx)>rx||Math.abs(dy)>ry)){
+  if(!exploring(game)&&['playing','choosing'].includes(game.state)&&(Math.abs(dx)>rx||Math.abs(dy)>ry)){
    const ratio=Math.min(rx/(Math.abs(dx)||1),ry/(Math.abs(dy)||1));let x=w/2+dx*ratio,y=h/2+dy*ratio;
    if(markers.some(m=>Math.abs(m.x-x)<60&&Math.abs(m.y-y)<44))y+=y<h/2?44:-44;
    markers.push({x,y});marker.hidden=false;marker.style.left=`${x}px`;marker.style.top=`${y}px`;marker.querySelector('b').style.transform=`rotate(${Math.atan2(dy,dx)}rad)`;marker.querySelector('span').textContent=dual?label:'보스';marker.setAttribute('aria-label',`화면 밖 ${label} 방향`);
   }
  }
+ updateExplorationGuides();
  const active=['playing','choosing'].includes(game.state),lowHp=active&&p.hp>0&&p.hp/p.maxHp<=.25,urgent=active&&game.bossSpawned&&game.timeRemaining()<=15;
  $('battle').classList.toggle('low-health',lowHp);$('timer').classList.toggle('urgent',urgent);
  const warning=$('combat-warning'),warningText=[lowHp?'체력 부족 · 안전한 방향으로 이동하세요':'',urgent?'시간 임박 · 수문장을 처치하세요':''].filter(Boolean).join(' / ');
@@ -239,7 +241,20 @@ function updateHud(){
 
  const tray=Object.entries(game.skills).filter(([,lv])=>lv>0).map(([id,lv])=>{const s=SKILLS.find(s=>s.id===id);return `<div class="skill-chip" aria-label="${s.name} 레벨 ${lv}">${svg(s.icon)}<small>${lv}</small></div>`;}).join('');if($('skill-tray').innerHTML!==tray)$('skill-tray').innerHTML=tray;
 }
-function resize(){w=window.innerWidth;h=window.innerHeight;dpr=profile.settings.quality==='low'?1:Math.min(window.devicePixelRatio||1,2);$('canvas').width=Math.floor(w*dpr);$('canvas').height=Math.floor(h*dpr);zoom=clamp(w/490,.65,1.25);if(w>h)zoom=clamp(h/560,.6,1);}
+function updateExplorationGuides(){
+ const markers=[];
+ for(const id of ['origin-direction','next-gate-direction','previous-gate-direction'])$(id).hidden=true;
+ for(const guide of explorationGuides(game)){
+  const marker=$(guide.id),dx=(guide.point.x-game.player.x)*zoom,dy=(guide.point.y-game.player.y)*zoom,rx=Math.max(30,w/2-65),ry=Math.max(30,h/2-95);
+  if(Math.abs(dx)<=w/2-25&&Math.abs(dy)<=h/2-25)continue;
+  const ratio=Math.min(rx/(Math.abs(dx)||1),ry/(Math.abs(dy)||1));let x=w/2+dx*ratio,y=h/2+dy*ratio;
+  for(let i=0;i<3&&markers.some(m=>Math.abs(m.x-x)<105&&Math.abs(m.y-y)<48);i++)y=Math.max(80,Math.min(h-80,y+(y<h/2?52:-52)));
+  markers.push({x,y});marker.hidden=false;marker.style.left=`${x}px`;marker.style.top=`${y}px`;
+  marker.querySelector('b').style.transform=`rotate(${Math.atan2(dy,dx)}rad)`;
+  marker.querySelector('span').textContent=`${guide.label} · ${Math.round(Math.hypot(dx,dy)/zoom)}m`;marker.setAttribute('aria-label',marker.querySelector('span').textContent+' 방향');
+ }
+}
+function resize(){w=window.innerWidth;h=window.innerHeight;dpr=profile.settings.quality==='low'?1:Math.min(window.devicePixelRatio||1,2);$('canvas').width=Math.floor(w*dpr);$('canvas').height=Math.floor(h*dpr);zoom=clamp(w/490,.65,1.25);if(w>h)zoom=clamp(h/560,.6,1);if(game&&exploring(game))setWorldView(game,w/(2*zoom),h/(2*zoom));}
 window.addEventListener('resize',()=>{
  const dimensionsChanged=w!==window.innerWidth||h!==window.innerHeight;
  if(dimensionsChanged){diagnostics.interrupt();resetInput();pauseGame();}
@@ -275,16 +290,26 @@ function draw(){
  // Staggered stonework, engraved paths and cracks.
  for(let gy=Math.floor(minY/64);gy<=Math.ceil(maxY/64);gy++)for(let gx=Math.floor(minX/96);gx<=Math.ceil(maxX/96);gx++){
   const x=gx*96+(gy%2)*48,y=gy*64,n=Math.abs((gx*17+gy*31)%7);
-  if(x<-96||x>1600||y<-64||y>1600)continue;
+  if(!exploring(game)&&(x<-96||x>1600||y<-64||y>1600))continue;
   const shades=['#202b2d','#243033','#222e30','#263234','#1e2a2d','#232f31','#212b2e'];
   ctx.fillStyle=shades[n];ctx.fillRect(x+1,y+1,94,62);ctx.strokeStyle='#40515225';ctx.lineWidth=1;ctx.strokeRect(x+3,y+3,90,58);
   if(n===2){ctx.strokeStyle='#0e1b1f66';ctx.beginPath();ctx.moveTo(x+15,y+10);ctx.lineTo(x+35,y+25);ctx.lineTo(x+27,y+35);ctx.lineTo(x+44,y+60);ctx.stroke();}
   if(n===5){ctx.fillStyle='#5575631a';ctx.fillRect(x+6,y+51,28,5);}
  }
- ctx.strokeStyle='#77908033';ctx.lineWidth=4;ctx.strokeRect(15,15,1570,1570);ctx.strokeStyle='#0b1217';ctx.lineWidth=18;ctx.strokeRect(0,0,1600,1600);
+ if(!exploring(game)){ctx.strokeStyle='#77908033';ctx.lineWidth=4;ctx.strokeRect(15,15,1570,1570);ctx.strokeStyle='#0b1217';ctx.lineWidth=18;ctx.strokeRect(0,0,1600,1600);}
  ctx.save();ctx.translate(800,800);ctx.rotate(Math.PI/4);ctx.strokeStyle='#b1a77b28';ctx.lineWidth=2;ctx.strokeRect(-100,-100,200,200);ctx.strokeRect(-120,-120,240,240);ctx.restore();circle(800,800,62,null,'#aaab842a');
+ if(exploring(game)){
+  for(const {point,label,id} of explorationGuides(game)){
+   if(point.x<minX||point.x>maxX||point.y<minY||point.y>maxY)continue;
+   const tint=id==='origin-direction'?'#8fe8ce':id==='previous-gate-direction'?'#9babb3':'#edba79';
+   circle(point.x,point.y,id==='origin-direction'?75:48,'#10272d',tint);
+   ctx.save();ctx.translate(point.x,point.y);ctx.rotate(Math.PI/4);ctx.strokeStyle=tint;ctx.lineWidth=3;ctx.strokeRect(-26,-26,52,52);ctx.restore();
+   ctx.font='bold 13px system-ui';ctx.textAlign='center';ctx.fillStyle=tint;ctx.fillText(label,point.x,point.y-60);
+   if(id==='origin-direction'){ctx.fillStyle='#426c66';ctx.fillRect(point.x-13,point.y-28,26,48);ctx.fillStyle=tint;ctx.fillRect(point.x-8,point.y-33,16,10);}
+  }
+ }
  // Visible obstacles use the exact collision rectangles.
- for(const o of gameObstacles(game)){if(o.x+o.w<minX||o.x>maxX||o.y+o.h<minY||o.y>maxY)continue;ctx.fillStyle='#0007';ctx.fillRect(o.x+7,o.y+7,o.w,o.h);ctx.fillStyle=color;ctx.fillRect(o.x,o.y,o.w,o.h);ctx.fillStyle='#17272ac0';ctx.fillRect(o.x+4,o.y+4,o.w-8,o.h-8);ctx.strokeStyle='#9dbaa780';ctx.lineWidth=2;ctx.strokeRect(o.x,o.y,o.w,o.h);}
+ for(const o of gameObstacles(game)){if(o.x+o.w<minX||o.x>maxX||o.y+o.h<minY||o.y>maxY)continue;ctx.fillStyle='#0007';ctx.fillRect(o.x+7,o.y+7,o.w,o.h);ctx.fillStyle=exploring(game)?FLOORS[Math.min(4,areaLevel(o)-1)].color:color;ctx.fillRect(o.x,o.y,o.w,o.h);ctx.fillStyle='#17272ac0';ctx.fillRect(o.x+4,o.y+4,o.w-8,o.h-8);ctx.strokeStyle='#9dbaa780';ctx.lineWidth=2;ctx.strokeRect(o.x,o.y,o.w,o.h);}
  for(const e of game.enemies)if(e.telegraph>0){const radius=e.attackRadius||95,pulse=1-e.telegraph/(e.windup||1.1);circle(e.targetX,e.targetY,radius,'#d4695d1a','#dc7d69');circle(e.targetX,e.targetY,radius*pulse,null,'#dcb797');}
  // Experience point drops must remain visible independently of damage-number/effect settings.
  for(const gem of game.gems){

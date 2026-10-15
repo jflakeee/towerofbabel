@@ -1,3 +1,4 @@
+import {safeSpawn} from './world.js';
 import {grantStartingSkill,resolveChoices} from './automation.js';
 import {normalizeItem,rollOption,OPTION_DEFS,itemStats,normalizeAutomation,normalizeGem,gemKey} from './content.js';
 import {Game,UPGRADES,SLOT_NAMES,costFor,allItems,organizeInventory,seededRandom,grantRewards,recordedSkills} from './engine.js';
@@ -54,12 +55,12 @@ export function settleRun(profile,run,persist){if(!['won','lost'].includes(run.s
 // Preparation commits one draft: automatic spending cannot outlive a failed run save.
 export function prepareRun(profile,{resume=false,floor=profile.selectedFloor,id}={},persist){
  return editProfile(profile,p=>{
-  if(resume){if(p.run?.encounter&&p.run.encounter!=='stage')return {ok:false,error:'투기장 입장·보상 규칙은 아직 준비 중입니다.'};const game=Game.restore(p,p.run);if(!game)return {ok:false,error:'전투 저장을 읽지 못했습니다. 백업을 내보낸 뒤 새 도전을 시작하세요.'};p.run=game.snapshot();return {ok:true,game};}
+  if(resume){if(p.run?.encounter&&p.run.encounter!=='stage')return {ok:false,error:'투기장 입장·보상 규칙은 아직 준비 중입니다.'};const game=Game.restore(p,p.run);if(!game)return {ok:false,error:'전투 저장을 읽지 못했습니다. 백업을 내보낸 뒤 새 도전을 시작하세요.'};if(game.worldVersion!==2){game.worldVersion=2;game.exploration={gate:1,previous:null};for(const entity of [game.player,...game.enemies])Object.assign(entity,safeSpawn(game,entity.x,entity.y,entity.r));}p.run=game.snapshot();return {ok:true,game};}
   if(p.run)return {ok:false,error:'저장된 전투를 먼저 이어하거나 정산하세요.'};
   if(!Number.isInteger(floor)||floor<1||floor>p.unlocked)return {ok:false,error:'아직 도전할 수 없는 층입니다.'};
   p.selectedFloor=floor;
   if(p.automation.upgradeBudget>0){if(typeof id!=='string'||!id)return {ok:false,error:'도전 준비 식별자가 없습니다.'};const upgraded=autoUpgrade(p,id,()=>{});if(!upgraded.ok)return upgraded;}
-  const game=new Game(p);if(p.unlocked>=4)grantStartingSkill(game);
+  const game=new Game(p,{exploration:true});if(p.unlocked>=4)grantStartingSkill(game);
   // Independent mobile tuning: eight visible points fund the first level-up.
   game.gems=Array.from({length:8},(_,i)=>{const angle=i*Math.PI/4;return {x:game.player.x+Math.cos(angle)*80,y:game.player.y+Math.sin(angle)*80,value:1};});
   p.run=game.snapshot();return {ok:true,game};

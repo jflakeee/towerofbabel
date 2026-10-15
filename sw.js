@@ -1,7 +1,7 @@
 const CACHE_PREFIX='babel-mobile-'+new URL(self.registration.scope).pathname+'@';
 const CACHE=CACHE_PREFIX+'development';
 const ASSET_HASHES={}; // BUILD_ASSET_HASHES
-const FILES=['./index.html','./styles.css','./src/diagnostics.js','./src/input.js','./src/app.js','./src/engine.js','./src/automation.js','./src/transactions.js','./src/content.js','./src/storage.js','./src/world.js','./manifest.webmanifest','./assets/icon.svg','./assets/icon-180.png','./assets/icon-192.png','./assets/icon-512.png'];
+const FILES=['./index.html','./styles.css','./src/diagnostics.js','./src/input.js','./src/app.js','./src/engine.js','./src/automation.js','./src/transactions.js','./src/content.js','./src/storage.js','./src/world.js','./src/exploration.js','./manifest.webmanifest','./assets/icon.svg','./assets/icon-180.png','./assets/icon-192.png','./assets/icon-512.png'];
 const assetURL=path=>new URL(path,self.registration.scope).href;
 const paths=Object.keys(ASSET_HASHES).length?Object.keys(ASSET_HASHES):FILES;
 const assets=new Map(paths.map(path=>[assetURL(path),path]));
