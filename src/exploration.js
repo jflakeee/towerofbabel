@@ -1,5 +1,5 @@
 // Independent mobile exploration rules. No visited-map history is retained.
-export const ORIGIN={x:800,y:800},CHUNK_SIZE=384;
+export const ORIGIN={x:800,y:800},CHUNK_SIZE=384,UNLOAD_DISTANCE=1000;
 const views=new WeakMap(),maps=new WeakMap();
 export const exploring=game=>game.worldVersion===2;
 export const radialDistance=point=>Math.hypot(point.x-ORIGIN.x,point.y-ORIGIN.y);
@@ -22,15 +22,23 @@ function chunk(x,y){
  return [o];
 }
 export function residentMap(game){
- const v=worldView(game),p=game.player,left=Math.floor((p.x-v.x)/CHUNK_SIZE),right=Math.floor((p.x+v.x)/CHUNK_SIZE),top=Math.floor((p.y-v.y)/CHUNK_SIZE),bottom=Math.floor((p.y+v.y)/CHUNK_SIZE);
- const key=[left,right,top,bottom].join(':');let cached=maps.get(game);if(cached?.key===key)return cached;
+ const p=game.player;let cached=maps.get(game);
+ // Movement changes the circular boundary; collision queries at the same
+ // position share the result instead of rebuilding terrain for every entity.
+ if(cached?.x===p.x&&cached?.y===p.y)return cached;
+ const left=Math.floor((p.x-UNLOAD_DISTANCE)/CHUNK_SIZE),right=Math.floor((p.x+UNLOAD_DISTANCE)/CHUNK_SIZE),top=Math.floor((p.y-UNLOAD_DISTANCE)/CHUNK_SIZE),bottom=Math.floor((p.y+UNLOAD_DISTANCE)/CHUNK_SIZE);
  const chunks=new Map(),obstacles=[];
- for(let y=top;y<=bottom;y++)for(let x=left;x<=right;x++){const id=`${x}:${y}`,objects=cached?.chunks.get(id)||chunk(x,y);chunks.set(id,objects);obstacles.push(...objects);}
- cached={key,chunks,obstacles};maps.set(game,cached);return cached;
+ for(let y=top;y<=bottom;y++)for(let x=left;x<=right;x++){
+  const id=`${x}:${y}`,objects=(cached?.chunks.get(id)||chunk(x,y)).filter(o=>withinRetentionDistance(game,{x:o.x+o.w/2,y:o.y+o.h/2}));
+  if(objects.length){chunks.set(id,objects);obstacles.push(...objects);}
+ }
+ cached={x:p.x,y:p.y,chunks,obstacles};maps.set(game,cached);return cached;
 }
-export function releaseOutsideView(game){
+export const withinRetentionDistance=(game,point)=>Math.hypot(point.x-game.player.x,point.y-game.player.y)<UNLOAD_DISTANCE;
+export function releaseDistantEntities(game){
  residentMap(game);
- for(const key of ['enemies','projectiles','enemyShots','gems','effects','texts'])game[key]=game[key].filter(e=>inView(game,e,e.r||0));
+ game.enemies=game.enemies.filter(e=>withinRetentionDistance(game,e));
+ for(const key of ['projectiles','enemyShots','gems','effects','texts'])game[key]=game[key].filter(e=>inView(game,e,e.r||0));
  if(!game.enemies.some(e=>e.type==='boss'&&e.hp>0)){game.bossSpawned=false;game.bossId=null;}
 }
 export function explorationGuides(game){if(!exploring(game))return [];return [
