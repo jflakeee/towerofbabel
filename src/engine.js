@@ -1,4 +1,4 @@
-import {exploring,newExploration,validExploration,gateLocation,areaScale,areaLevel,worldView,setWorldView,releaseOutsideView,canActivateGate,nextGateLocation,gateAfterClear} from './exploration.js';
+import {exploring,newExploration,validExploration,gateLocation,areaScale,areaLevel,worldView,setWorldView,releaseDistantEntities,canActivateGate,nextGateLocation,gateAfterClear} from './exploration.js';
 import {normalizeItem,rollOption,itemStats,defaultAutomation,normalizeAutomation,normalizeMaterials,GEM_DEFS,gemKey,ITEM_BASES,ITEM_PREFIXES} from './content.js';
 import {DIFFICULTIES,defaultJourney,normalizeJourney,gameObstacles,moveEntity,clearLine,firstWallTime,segmentCircleTime,safeSpawn,pursue} from './world.js';
 export const FLOORS = [
@@ -225,7 +225,7 @@ export class Game {
   const mag=Math.hypot(input.x,input.y),mx=mag>1?input.x/mag:input.x,my=mag>1?input.y/mag:input.y;
   if(mag>.05)p.face=Math.atan2(my,mx);
   moveEntity(this,p,(this.dashTime>0?this.dashDir.x*670:mx*p.speed)*dt,(this.dashTime>0?this.dashDir.y*670:my*p.speed)*dt);if(this.gearStats.regen)p.hp=Math.min(p.maxHp,p.hp+p.maxHp*.005*dt);
-  if(exploring(this))releaseOutsideView(this);
+  if(exploring(this))releaseDistantEntities(this);
   this.spawnClock-=dt;
   if((exploring(this)||this.time<this.duration)&&this.spawnClock<=0&&this.enemies.length<100){const elite=this.time>=this.nextEliteAt;if(elite)this.nextEliteAt+=23;this.spawn(elite?'elite':undefined);this.spawnClock=exploring(this)?Math.max(.3,1.1/Math.sqrt(areaScale(p))):Math.max(.22,1.1-this.time*.006-this.floor*.07);}
   if(this.encounter==='stage'&&!this.bossSpawned&&(exploring(this)?canActivateGate(this):this.time>=this.duration)){if(!exploring(this))p.hp=Math.min(p.maxHp,p.hp+p.maxHp*.2);this.spawn('boss');}

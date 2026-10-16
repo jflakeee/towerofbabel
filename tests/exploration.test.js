@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Game,defaultProfile} from '../src/engine.js';
 import {prepareRun,advanceStage} from '../src/transactions.js';
-import {ORIGIN,gateLocation,residentMap,setWorldView,releaseOutsideView,areaScale,explorationGuides,nextGateLocation} from '../src/exploration.js';
+import {ORIGIN,gateLocation,residentMap,setWorldView,releaseDistantEntities,areaScale,explorationGuides,nextGateLocation} from '../src/exploration.js';
 import {isWalkable,moveEntity} from '../src/world.js';
 const make=()=>{const p=defaultProfile(),g=new Game(p,{seed:41,exploration:true});g.spawnClock=g.attackClock=999;return {p,g};};
 test('new and legacy resumed journeys use exploration without spending twice or resetting growth',()=>{
@@ -26,23 +26,24 @@ test('victory keeps world position and live enemies, settles once, and records p
  const restored=Game.restore(p,p.run);assert.deepEqual(restored.exploration,next.exploration);assert.equal(restored.player.x,next.player.x);
  const gold=p.gold;assert.ok(advanceStage(p,g,()=>{}).replayed);assert.equal(p.gold,gold);assert.equal(p.history.length,1);
 });
-test('visible map residency stays bounded and revisiting regenerates the same terrain without history',()=>{
+test('distance-based map residency stays bounded and revisiting regenerates the same terrain without history',()=>{
  const {g}=make();setWorldView(g,250,400);const original=structuredClone(residentMap(g).obstacles),startKeys=[...residentMap(g).chunks.keys()];
- for(let i=1;i<=300;i++){g.player.x=800+i*1000;g.player.y=800-i*700;const map=residentMap(g);assert.ok(map.chunks.size<=12);assert.ok(map.obstacles.length<=12);}
+ for(let i=1;i<=300;i++){g.player.x=800+i*1000;g.player.y=800-i*700;const map=residentMap(g);assert.ok(map.chunks.size<=49);assert.ok(map.obstacles.length<=49);}
  assert.ok(startKeys.every(key=>!residentMap(g).chunks.has(key)));Object.assign(g.player,ORIGIN);assert.deepEqual(residentMap(g).obstacles,original);
  const snapshot=g.snapshot();assert.equal('chunks'in snapshot,false);assert.equal('map'in snapshot,false);assert.ok(JSON.stringify(snapshot).length<10000);
  assert.ok(isWalkable(g,ORIGIN.x,ORIGIN.y,35));assert.ok(isWalkable(g,gateLocation(1).x,gateLocation(1).y,35));
  Object.assign(g.player,{x:-1000,y:-1000});moveEntity(g,g.player,-5,0);assert.equal(g.player.x,-1005);
 });
-test('offscreen combat is discarded and enemy difficulty depends on location, not elapsed time',()=>{
+test('distant combat is discarded and enemy difficulty depends on location, not elapsed time',()=>{
  const {g}=make();setWorldView(g,300,600);g.spawnClock=0;g.update(.01);assert.ok(g.enemies.length);
- Object.assign(g.player,{x:30000,y:30000});releaseOutsideView(g);assert.equal(g.enemies.length,0);assert.equal(g.enemyShots.length,0);
+ Object.assign(g.player,{x:30000,y:30000});releaseDistantEntities(g);assert.equal(g.enemies.length,0);assert.equal(g.enemyShots.length,0);
  const sample=(x,time)=>{const a=new Game(defaultProfile(),{seed:19,exploration:true});a.player.x=x;a.time=time;return a.spawn('grunt');};
  const near=sample(800,0),far=sample(9800,0),revisit=sample(9800,2000);assert.ok(far.hp>near.hp);assert.ok(far.damage>near.damage);assert.equal(far.hp,revisit.hp);assert.equal(far.damage,revisit.damage);assert.ok(areaScale({x:-9000,y:800})>areaScale(ORIGIN));
 });
 test('leaving a guardian unloads it, revisiting respawns it, but defeated guardians never pay twice',()=>{
  const {p,g}=make();Object.assign(g.player,gateLocation(1));g.update(.01);const boss=g.currentBoss();assert.ok(boss);boss.hp=1;
- Object.assign(g.player,ORIGIN);releaseOutsideView(g);assert.equal(g.currentBoss(),null);
+ Object.assign(g.player,ORIGIN);releaseDistantEntities(g);assert.equal(g.currentBoss(),boss);assert.equal(boss.hp,1);
+ g.player.x=boss.x-1000;g.player.y=boss.y;releaseDistantEntities(g);assert.equal(g.currentBoss(),null);
  Object.assign(g.player,gateLocation(1));g.update(.01);assert.equal(g.currentBoss().hp,g.currentBoss().maxHp);
  g.damageEnemy(g.currentBoss(),1e9);const next=advanceStage(p,g,()=>{}).game;Object.assign(next.player,gateLocation(1));next.update(.01);assert.equal(next.currentBoss(),null);assert.equal(next.exploration.gate,2);
 });
@@ -120,4 +121,27 @@ test('older saves awaiting the next guardian gain a persistent 1000-distance way
  assert.ok(Math.hypot(target.x-restored.player.x,target.y-restored.player.y)>=1000);
  assert.ok(Math.hypot(target.x-restored.exploration.previous.x,target.y-restored.exploration.previous.y)>=1000);
  assert.ok(restored.exploration.departure);assert.deepEqual(nextGateLocation(Game.restore(p,restored.snapshot())),target);
+});
+
+
+test('enemy retention uses a 1000 circular distance regardless of viewport and survives resume',()=>{
+ const {p,g}=make();setWorldView(g,100,100);
+ const near=g.spawn('grunt'),edge=g.spawn('grunt'),diagonal=g.spawn('grunt');
+ Object.assign(near,{x:g.player.x+999,y:g.player.y,hp:7});
+ Object.assign(edge,{x:g.player.x+1000,y:g.player.y});
+ Object.assign(diagonal,{x:g.player.x+800,y:g.player.y+800});
+ releaseDistantEntities(g);assert.deepEqual(g.enemies,[near]);assert.equal(near.hp,7);
+ const restored=Game.restore(p,g.snapshot());assert.ok(restored);assert.equal(restored.enemies[0].hp,7);
+ setWorldView(g,1600,1600);releaseDistantEntities(g);assert.deepEqual(g.enemies,[near]);
+ g.player.x-=1;releaseDistantEntities(g);assert.equal(g.enemies.length,0);
+});
+test('structures retain identity offscreen until 1000 from their center then regenerate on return',()=>{
+ const {g}=make();setWorldView(g,100,100);const structure=residentMap(g).obstacles[0];assert.ok(structure);
+ const center={x:structure.x+structure.w/2,y:structure.y+structure.h/2};
+ Object.assign(g.player,{x:center.x+999,y:center.y});assert.ok(residentMap(g).obstacles.includes(structure));
+ const cached=residentMap(g);assert.equal(residentMap(g),cached);
+ setWorldView(g,1600,1600);assert.equal(residentMap(g),cached);
+ g.player.x=center.x+1000;assert.ok(!residentMap(g).obstacles.includes(structure));
+ g.player.x=center.x+999;const regenerated=residentMap(g).obstacles.find(o=>o.x===structure.x&&o.y===structure.y);
+ assert.deepEqual(regenerated,structure);assert.notEqual(regenerated,structure);
 });
