@@ -5,6 +5,18 @@ import {prepareRun,advanceStage} from '../src/transactions.js';
 import {ORIGIN,gateLocation,residentMap,setWorldView,releaseDistantEntities,areaScale,explorationGuides,nextGateLocation} from '../src/exploration.js';
 import {isWalkable,moveEntity} from '../src/world.js';
 const make=()=>{const p=defaultProfile(),g=new Game(p,{seed:41,exploration:true});g.spawnClock=g.attackClock=999;return {p,g};};
+test('wide and rotated viewports spawn enemies inside retention after obstacle placement',()=>{
+ for(const view of [[1600,1600],[1600,300],[300,1600],[300,650]]){
+  const {g}=make();setWorldView(g,...view);
+  Object.assign(g.player,{x:12000,y:-8000});
+  for(let i=0;i<100;i++){
+   const e=g.spawn(i%2?'grunt':'elite');
+   assert.ok(Math.hypot(e.x-g.player.x,e.y-g.player.y)<1000);
+   assert.ok(isWalkable(g,e.x,e.y,e.r));
+  }
+  releaseDistantEntities(g);assert.equal(g.enemies.length,100);
+ }
+});
 test('new and legacy resumed journeys use exploration without spending twice or resetting growth',()=>{
  const p=defaultProfile(),start=prepareRun(p,{},()=>{});assert.equal(start.game.worldVersion,2);assert.equal(p.run.exploration.gate,1);
  const legacy=new Game(p,{seed:3});legacy.player.x=1000;legacy.skills.power=2;legacy.level=4;p.run=legacy.snapshot();
