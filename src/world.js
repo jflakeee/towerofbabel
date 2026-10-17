@@ -39,6 +39,20 @@ export function clearLine(game,a,b,r=0){return firstWallTime(game,a,b,r)===Infin
 export function safeSpawn(game,x,y,r){if(isWalkable(game,x,y,r))return {x,y};for(let radius=20;radius<=250;radius+=20)for(let i=0;i<16;i++){const a=i*Math.PI/8,nx=x+Math.cos(a)*radius,ny=y+Math.sin(a)*radius;if(isWalkable(game,nx,ny,r))return {x:nx,y:ny};}return {x:800,y:800};}
 function routeTarget(game,e,p){const cached=e.route;if(cached&&game.time<cached.until&&Math.hypot(p.x-cached.px,p.y-cached.py)<70&&Math.hypot(e.x-cached.x,e.y-cached.y)>8)return cached;
  const nodes=[{x:e.x,y:e.y},{x:p.x,y:p.y}];for(const o of gameObstacles(game)){const pad=e.r+3;for(const x of [o.x-pad,o.x+o.w+pad])for(const y of [o.y-pad,o.y+o.h+pad])if(isWalkable(game,x,y,e.r))nodes.push({x,y});}
- const scores=nodes.map(()=>Infinity),prev=nodes.map(()=>-1),visited=new Set();scores[0]=0;for(let n=0;n<nodes.length;n++){let at=-1;for(let i=0;i<nodes.length;i++)if(!visited.has(i)&&(at<0||scores[i]<scores[at]))at=i;if(at<0||!Number.isFinite(scores[at]))break;if(at===1)break;visited.add(at);for(let i=1;i<nodes.length;i++)if(!visited.has(i)&&clearLine(game,nodes[at],nodes[i],e.r+1)){const score=scores[at]+Math.hypot(nodes[i].x-nodes[at].x,nodes[i].y-nodes[at].y);if(score<scores[i]){scores[i]=score;prev[i]=at;}}}
+ // A* uses straight-line distance as a consistent lower bound. It preserves
+ // shortest paths on this visibility graph without expanding distant detours.
+ const heuristic=nodes.map(node=>Math.hypot(node.x-p.x,node.y-p.y));
+ const scores=nodes.map(()=>Infinity),prev=nodes.map(()=>-1),visited=new Set();scores[0]=0;
+ for(let n=0;n<nodes.length;n++){
+  let at=-1;
+  for(let i=0;i<nodes.length;i++)if(!visited.has(i)&&(at<0||scores[i]+heuristic[i]<scores[at]+heuristic[at]))at=i;
+  if(at<0||!Number.isFinite(scores[at])||at===1)break;
+  visited.add(at);
+  for(let i=1;i<nodes.length;i++)if(!visited.has(i)){
+   const score=scores[at]+Math.hypot(nodes[i].x-nodes[at].x,nodes[i].y-nodes[at].y);
+   // An edge that cannot improve the route needs no wall intersection work.
+   if(score<scores[i]&&clearLine(game,nodes[at],nodes[i],e.r+1)){scores[i]=score;prev[i]=at;}
+  }
+ }
  let at=1;if(prev[at]<0)return p;while(prev[at]>0)at=prev[at];const target={...nodes[at],until:game.time+.8,px:p.x,py:p.y};e.route=target;return target;}
 export function pursue(game,e,p,step){const target=clearLine(game,e,p,e.r+1)?p:routeTarget(game,e,p),dx=target.x-e.x,dy=target.y-e.y,d=Math.hypot(dx,dy)||1;moveEntity(game,e,dx/d*Math.min(step,d),dy/d*Math.min(step,d));}
