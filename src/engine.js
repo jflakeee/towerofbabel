@@ -202,6 +202,8 @@ export class Game {
   const dmg=amount*(1+(this.skills.power||0)*.2)*(crit?2:1);e.hp-=dmg;e.hit=.1;
   if(this.texts.length<35)this.texts.push({x:e.x,y:e.y-18,text:String(Math.round(dmg)),color:crit?'#e8c67d':'#c8d4c7',life:.6,maxLife:.6});
   if(e.hp<=0){this.kills++;if(this.kills%15===0&&this.player.hp>0){this.player.hp=Math.min(this.player.maxHp,this.player.hp+12);this.addEffect('ring',this.player.x,this.player.y,40,'#86b9aa',.4);}this.gold+=Math.round((e.type==='boss'?25:e.type==='elite'?10:1)*this.fortune*DIFFICULTIES[this.difficulty].reward*(this.mode==='chaos'?1+this.depth*.05:1));this.gems.push({x:e.x,y:e.y,value:e.type==='elite'?6:1});
+   // Bound drops before a guardian kill can end the frame and trigger saving.
+   if(this.gems.length>350){const combined=this.gems.splice(0,this.gems.length-300);this.gems.push({x:combined[0].x,y:combined[0].y,value:combined.reduce((s,g)=>s+g.value,0)});}
    if(e.type==='elite'){this.loot.push(this.rollLoot());this.rollMaterial();}
    if(e.type==='boss'){if(exploring(this))this.exploration.previous={x:e.x,y:e.y};this.rollMaterial(true);this.loot.push(this.rollLoot(true));this.bossId=this.currentBoss()?.id||null;if(!this.livingBosses().length&&this.player.hp>0&&this.state==='playing'){this.state='won';this.event='won';}}
    this.addEffect('death',e.x,e.y,e.r,'#8ea899',.35);
@@ -281,8 +283,6 @@ export class Game {
   this.skillClocks.meteor-=dt;if(this.skills.meteor&&this.skillClocks.meteor<=0){const target=this.nearest(450);if(target){this.addEffect('ring',target.x,target.y,100,'#dd9463',.5);for(const e of this.enemies)if(distance(e,target)<100&&clearLine(this,target,e))this.damageEnemy(e,45*this.skills.meteor*(1+(this.gearStats.fire||0)/100));}this.skillClocks.meteor=3.5;}
   if(this.state!=='playing')return;
   for(const gem of this.gems){const d=distance(gem,p),radius=125+(this.skills.magnet||0)*35+(this.gearStats.magnet||0);if(d<radius&&clearLine(this,gem,p)){const step=Math.min(d,350*dt);gem.x+=(p.x-gem.x)/(d||1)*step;gem.y+=(p.y-gem.y)/(d||1)*step;}if(d<20){this.gainXp(gem.value);gem.value=0;}}
-  // Aggregate distant experience instead of silently discarding progression.
-  if(this.gems.length>350){const combined=this.gems.splice(0,this.gems.length-300);this.gems.push({x:combined[0].x,y:combined[0].y,value:combined.reduce((s,g)=>s+g.value,0)});}
   this.enemies=this.enemies.filter(e=>e.hp>0);this.projectiles=this.projectiles.filter(b=>b.life>0);this.enemyShots=this.enemyShots.filter(b=>b.life>0);this.gems=this.gems.filter(g=>g.value>0);
   for(const e of this.effects)e.life-=dt;this.effects=this.effects.filter(e=>e.life>0).slice(-80);
   for(const t of this.texts){t.life-=dt;t.y-=22*dt;}this.texts=this.texts.filter(t=>t.life>0);
