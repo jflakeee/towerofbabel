@@ -5,6 +5,24 @@ import {prepareRun,advanceStage} from '../src/transactions.js';
 import {ORIGIN,gateLocation,residentMap,setWorldView,releaseDistantEntities,areaScale,explorationGuides,nextGateLocation} from '../src/exploration.js';
 import {isWalkable,moveEntity} from '../src/world.js';
 const make=()=>{const p=defaultProfile(),g=new Game(p,{seed:41,exploration:true});g.spawnClock=g.attackClock=999;return {p,g};};
+test('mass kills at the point limit can save and settle a guardian victory without losing XP',()=>{
+ const {p,g}=make();
+ g.gems=Array.from({length:350},()=>({x:g.player.x,y:g.player.y,value:1}));
+ const enemies=[g.spawn('grunt'),g.spawn('elite')],boss=g.spawn('boss');
+ for(const enemy of enemies)g.damageEnemy(enemy,1e9,false);
+ assert.ok(Game.restore(p,g.snapshot()));
+ g.damageEnemy(boss,1e9,false);
+ assert.equal(g.state,'won');assert.ok(g.gems.length<=350);
+ assert.equal(g.gems.reduce((sum,gem)=>sum+gem.value,0),358);
+ const before=g.snapshot(),profile=structuredClone(p);
+ assert.equal(advanceStage(p,g,()=>{throw Error('quota');}).ok,false);
+ assert.deepEqual(g.snapshot(),before);assert.deepEqual(p,profile);
+ const result=advanceStage(p,g,()=>{});assert.ok(result.ok);
+ assert.ok(result.game.level>1);assert.equal(result.game.gems.length,0);
+ assert.ok(Game.restore(p,p.run));
+ const settled=structuredClone(p);
+ assert.ok(advanceStage(p,g,()=>{}).replayed);assert.deepEqual(p,settled);
+});
 test('wide and rotated viewports spawn enemies inside retention after obstacle placement',()=>{
  for(const view of [[1600,1600],[1600,300],[300,1600],[300,650]]){
   const {g}=make();setWorldView(g,...view);
