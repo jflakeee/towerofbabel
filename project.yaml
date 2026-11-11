@@ -1,0 +1,12 @@
+# Tower of Babel — Claude Code Game Studios configuration
+# Framework source: Donchitos/Claude-Code-Game-Studios
+schema_version: 1
+framework:
+  version: 1.3.0
+  last_upgraded: 2026-11-11
+project:
+  name: Tower of Babel
+  goal: Preserve and extend the existing mobile-first survivor action RPG
+modes:
+  rigor: standard
+  automation: collaborative
