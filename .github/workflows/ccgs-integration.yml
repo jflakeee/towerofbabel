@@ -1,0 +1,47 @@
+name: CCGS integration regression (no deploy)
+on:
+  push:
+    branches:
+      - chore/ccgs-integration-20261111
+  pull_request:
+    paths:
+      - '.claude/**'
+      - 'CLAUDE.md'
+      - 'project.yaml'
+      - '.github/workflows/ccgs-integration.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate integration files and scripts
+        run: |
+          test -f CLAUDE.md
+          test -f project.yaml
+          test -f .claude/skills/start/SKILL.md
+          test -f .claude/skills/project-stage-detect/SKILL.md
+          test -f .claude/skills/map-systems/SKILL.md
+          for file in .claude/scripts/*.sh .claude/hooks/*.sh; do
+            bash -n "$file"
+          done
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          cfg = Path('project.yaml').read_text()
+          assert re.search(r'^  rigor: standard$', cfg, re.M)
+          assert re.search(r'^  automation: collaborative$', cfg, re.M)
+          for name in ('start', 'project-stage-detect', 'map-systems'):
+              text = Path(f'.claude/skills/{name}/SKILL.md').read_text()
+              assert text.startswith('---\n')
+              assert f'name: {name}' in text
+          print('CCGS static integration checks passed')
+          PY
+      - run: npm run check
+      - run: npm test
+      - run: npm run test:soak
+      - run: npm run build
