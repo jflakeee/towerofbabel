@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - chore/ccgs-integration-20261111
+  workflow_dispatch:
   pull_request:
     paths:
       - '.claude/**'
@@ -46,6 +47,13 @@ jobs:
           bash .claude/scripts/project-state.sh
           bash .claude/hooks/yaml-helper.sh resolve_config --keys workflow,automation
           bash .claude/scripts/artifact-check.sh
+  game-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - run: npm run check
       - run: npm test
       - run: npm run test:soak
