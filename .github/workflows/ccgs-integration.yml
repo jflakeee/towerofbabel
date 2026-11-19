@@ -62,3 +62,5 @@ jobs:
         run: node scripts/pathfinding-benchmark.mjs
       - name: Seeded economy audit
         run: node scripts/economy-audit.mjs
+      - name: Seeded hero growth audit
+        run: node scripts/growth-audit.mjs
