@@ -64,3 +64,5 @@ jobs:
         run: node scripts/economy-audit.mjs
       - name: Seeded hero growth audit
         run: node scripts/growth-audit.mjs
+      - name: Arena preview economy audit
+        run: node scripts/arena-economy-audit.mjs
