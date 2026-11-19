@@ -9,3 +9,25 @@ test('missing bundle asset fails closed instead of mixing a network version',asy
 test('offline readiness reports matching build and detects a missing asset',async()=>{const w=worker();await w.emit('install');let result;const message={data:{type:'BUNDLE_STATUS'},ports:[{postMessage:value=>result=value}]};await w.emit('message',message);assert.equal(result.ready,true);assert.equal(result.build,'v1');w.caches.data.get('babel-mobile-/towerofbabel/@v1').delete(scope+'src/app.js');await w.emit('message',message);assert.equal(result.ready,false);});
 
 test('an evicted asset is repaired only with the original verified bytes',async()=>{const w=worker();await w.emit('install');w.caches.data.get('babel-mobile-/towerofbabel/@v1').delete(scope+'src/app.js');assert.equal(await (await w.request(scope+'src/app.js')).text(),'app-1');assert.equal(w.counts().requests,3);assert.equal(await (await w.request(scope+'src/app.js')).text(),'app-1');assert.equal(w.counts().requests,3);});
+
+test('network failure during cache repair permits later verified retry',async()=>{
+ let offline=false;
+ const w=worker({fetchBody:path=>{if(offline)throw Error('offline');return new Response(path==='./index.html'?'index-1':'app-1');}});
+ await w.emit('install');
+ const cache=w.caches.data.get('babel-mobile-/towerofbabel/@v1');
+ cache.delete(scope+'src/app.js');offline=true;
+ assert.equal((await w.request(scope+'src/app.js')).status,503);
+ assert.equal(cache.has(scope+'src/app.js'),false);
+ assert.equal(await (await w.request(scope,'navigate')).text(),'index-1');
+ offline=false;
+ assert.equal(await (await w.request(scope+'src/app.js')).text(),'app-1');
+ assert.equal(cache.has(scope+'src/app.js'),true);
+});
+test('HTTP error on replacement installation preserves old bundle',async()=>{
+ const caches=new CacheStorage(),old=worker({caches,version:'old'});
+ await old.emit('install');
+ const next=worker({caches,version:'new',fetchBody:path=>path==='./index.html'?new Response('index-1'):new Response('unavailable',{status:503})});
+ await assert.rejects(next.emit('install'));
+ assert.deepEqual(await caches.keys(),['babel-mobile-/towerofbabel/@old']);
+ assert.equal(await (await old.request(scope+'src/app.js')).text(),'app-1');
+});
