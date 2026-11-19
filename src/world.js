@@ -44,13 +44,13 @@ function routeTarget(game,e,p){const cached=e.route;if(cached&&game.time<cached.
  // A* uses straight-line distance as a consistent lower bound. It preserves
  // shortest paths on this visibility graph without expanding distant detours.
  const heuristic=nodes.map(node=>Math.hypot(node.x-p.x,node.y-p.y));
- const scores=nodes.map(()=>Infinity),prev=nodes.map(()=>-1),visited=new Set();scores[0]=0;
+ const scores=nodes.map(()=>Infinity),prev=nodes.map(()=>-1),visited=new Uint8Array(nodes.length);scores[0]=0;
  for(let n=0;n<nodes.length;n++){
   let at=-1;
-  for(let i=0;i<nodes.length;i++)if(!visited.has(i)&&(at<0||scores[i]+heuristic[i]<scores[at]+heuristic[at]))at=i;
+  for(let i=0;i<nodes.length;i++)if(!visited[i]&&(at<0||scores[i]+heuristic[i]<scores[at]+heuristic[at]))at=i;
   if(at<0||!Number.isFinite(scores[at])||at===1)break;
-  visited.add(at);
-  for(let i=1;i<nodes.length;i++)if(!visited.has(i)){
+  visited[at]=1;
+  for(let i=1;i<nodes.length;i++)if(!visited[i]){
    const score=scores[at]+Math.hypot(nodes[i].x-nodes[at].x,nodes[i].y-nodes[at].y);
    // An edge that cannot improve the route needs no wall intersection work.
    if(score<scores[i]&&clearLine(game,nodes[at],nodes[i],e.r+1)){scores[i]=score;prev[i]=at;}
