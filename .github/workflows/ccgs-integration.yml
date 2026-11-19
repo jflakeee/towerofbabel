@@ -60,3 +60,5 @@ jobs:
       - run: npm run build
       - name: Pathfinding CPU baseline (synthetic)
         run: node scripts/pathfinding-benchmark.mjs
+      - name: Seeded economy audit
+        run: node scripts/economy-audit.mjs
