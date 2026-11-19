@@ -7,6 +7,10 @@ framework:
 project:
   name: Tower of Babel
   goal: Preserve and extend the existing mobile-first survivor action RPG
+engine:
+  name: Web
+  code_root: src
+  test_root: tests
 modes:
   rigor: standard
   automation: collaborative
