@@ -29,8 +29,10 @@ export function residentMap(game){
  const left=Math.floor((p.x-UNLOAD_DISTANCE)/CHUNK_SIZE),right=Math.floor((p.x+UNLOAD_DISTANCE)/CHUNK_SIZE),top=Math.floor((p.y-UNLOAD_DISTANCE)/CHUNK_SIZE),bottom=Math.floor((p.y+UNLOAD_DISTANCE)/CHUNK_SIZE);
  const chunks=new Map(),obstacles=[];
  for(let y=top;y<=bottom;y++)for(let x=left;x<=right;x++){
-  const id=`${x}:${y}`,objects=(cached?.chunks.get(id)||chunk(x,y)).filter(o=>withinRetentionDistance(game,{x:o.x+o.w/2,y:o.y+o.h/2}));
-  if(objects.length){chunks.set(id,objects);obstacles.push(...objects);}
+  const id=`${x}:${y}`,source=cached?.chunks.get(id)||chunk(x,y);
+  // Each generated chunk contains at most one obstacle.
+  const o=source[0];
+  if(o&&Math.hypot(o.x+o.w/2-p.x,o.y+o.h/2-p.y)<UNLOAD_DISTANCE){chunks.set(id,source);obstacles.push(o);}
  }
  cached={x:p.x,y:p.y,chunks,obstacles};maps.set(game,cached);return cached;
 }
