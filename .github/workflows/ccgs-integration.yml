@@ -58,3 +58,5 @@ jobs:
       - run: npm test
       - run: npm run test:soak
       - run: npm run build
+      - name: Pathfinding CPU baseline (synthetic)
+        run: node scripts/pathfinding-benchmark.mjs
