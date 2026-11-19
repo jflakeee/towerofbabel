@@ -1,0 +1,7 @@
+# P2-04 Arena economy proposal (not approved)
+
+Keep existing free isolated dual-boss preview unchanged until approval. Proposed formal arena: first entry free per profile, subsequent entries 30 shards, 300 seconds, two bosses, existing verified chaos progression scaling. Win: 90 shards and one guaranteed rare-or-higher item; first victory once per profile adds 60 shards. Loss, timeout and explicit abandonment: no reward. No real-money mechanic.
+
+Repeat net on win: 60 shards plus item (hypothetical liquidation mean 55.02505 from CI); on loss: -30. Break-even win probability is 1/3 ignoring loot, about 20.7% including hypothetical full liquidation. Actual win rates, clear times and access requirements are unverified; tune only after simulations. Compare per-minute returns with exploration including settlement; no claim of parity yet.
+
+Proposed entry and settlement are separate atomic persisted transactions, unique run ID, entry charged once, reward once, no preview writes. Resume pending formal run after reload without charging again; explicit abandonment settles without reward. Failed persistence leaves previous committed state and enables retry. Protect against multi-tab writers, duplicate settlement and corrupted saves; test v1/v2 migration with missing arena fields initialized safely. Existing exploration progress and equipment preserved. Clarify unlocking and repeat reward policy before implementation. No changes to runtime, main or Pages. Explicit user approval required before formal arena implementation.
