@@ -41,6 +41,11 @@ jobs:
               assert f'name: {name}' in text
           print('CCGS static integration checks passed')
           PY
+      - name: Execute CCGS diagnostic helpers
+        run: |
+          bash .claude/scripts/project-state.sh
+          bash .claude/hooks/yaml-helper.sh resolve_config --keys workflow,automation
+          bash .claude/scripts/artifact-check.sh
       - run: npm run check
       - run: npm test
       - run: npm run test:soak
