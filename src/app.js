@@ -282,6 +282,7 @@ window.addEventListener('pagehide',()=>{suspendPage();store?.close();});window.a
 function path(points,fill,stroke){ctx.beginPath();points.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();if(fill){ctx.fillStyle=fill;ctx.fill();}if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=1.5;ctx.stroke();}}
 function circle(x,y,r,fill,stroke){ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);if(fill){ctx.fillStyle=fill;ctx.fill();}if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=1.5;ctx.stroke();}}
 function ellipse(x,y,rx,ry,fill){ctx.beginPath();ctx.ellipse(x,y,rx,ry,0,0,Math.PI*2);ctx.fillStyle=fill;ctx.fill();}
+const shades=['#202b2d','#243033','#222e30','#263234','#1e2a2d','#232f31','#212b2e'];
 function draw(){
  if(!game||!ctx)return;const p=game.player,color=FLOORS[game.floor-1].color;
  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#0c1519';ctx.fillRect(0,0,w,h);
@@ -291,7 +292,6 @@ function draw(){
  for(let gy=Math.floor(minY/64);gy<=Math.ceil(maxY/64);gy++)for(let gx=Math.floor(minX/96);gx<=Math.ceil(maxX/96);gx++){
   const x=gx*96+(gy%2)*48,y=gy*64,n=Math.abs((gx*17+gy*31)%7);
   if(!exploring(game)&&(x<-96||x>1600||y<-64||y>1600))continue;
-  const shades=['#202b2d','#243033','#222e30','#263234','#1e2a2d','#232f31','#212b2e'];
   ctx.fillStyle=shades[n];ctx.fillRect(x+1,y+1,94,62);ctx.strokeStyle='#40515225';ctx.lineWidth=1;ctx.strokeRect(x+3,y+3,90,58);
   if(n===2){ctx.strokeStyle='#0e1b1f66';ctx.beginPath();ctx.moveTo(x+15,y+10);ctx.lineTo(x+35,y+25);ctx.lineTo(x+27,y+35);ctx.lineTo(x+44,y+60);ctx.stroke();}
   if(n===5){ctx.fillStyle='#5575631a';ctx.fillRect(x+6,y+51,28,5);}
@@ -318,8 +318,9 @@ function draw(){
   circle(gem.x,gem.y,r+5,'#69dcb52a');
   ctx.save();ctx.translate(gem.x,gem.y+bob);path([[0,-r],[r*.75,0],[0,r],[-r*.75,0]],gem.value>=6?'#f0cf78':'#8fe8ce','#eaffdd');circle(-1,-2,1.5,'#ffffff');ctx.restore();
  }
- const entities=[...game.enemies.map(e=>({...e,isPlayer:false})),{...p,isPlayer:true}].sort((a,b)=>a.y-b.y);
- for(const e of entities){if(e.x<minX-60||e.x>maxX+60||e.y<minY-60||e.y>maxY+60)continue;if(e.isPlayer)drawPlayer(e);else drawEnemy(e);}
+ const entities=game.enemies.filter(e=>!(e.x<minX-60||e.x>maxX+60||e.y<minY-60||e.y>maxY+60));
+ entities.push(p);entities.sort((a,b)=>a.y-b.y);
+ for(const e of entities){if(e===p)drawPlayer(e);else drawEnemy(e);}
  for(const b of game.projectiles){ctx.strokeStyle=b.color;ctx.lineWidth=b.r;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(b.x-b.vx*.03,b.y-b.vy*.03);ctx.lineTo(b.x,b.y);ctx.stroke();circle(b.x,b.y,b.r*.7,'#e6dec0');}
  for(const b of game.enemyShots){circle(b.x,b.y,b.r+3,'#bc625b30');circle(b.x,b.y,b.r,'#da8473');circle(b.x-1,b.y-1,2,'#f4c7a0');}
  const orbit=game.skills.orbit||0;for(let i=0;i<orbit;i++){const a=game.time*2.8+i*Math.PI*2/orbit,x=p.x+Math.cos(a)*75,y=p.y+Math.sin(a)*75;ctx.save();ctx.translate(x,y);ctx.rotate(a+.8);path([[-4,-13],[4,-13],[3,10],[-3,10]],'#d1d8c4','#ab9674');ctx.restore();}
