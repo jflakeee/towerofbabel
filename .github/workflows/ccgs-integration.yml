@@ -84,3 +84,34 @@ jobs:
           test -f external/plinkfx/package.json
           test -f external/pixelfx/package.json
           echo 'All six development submodules checked out successfully'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Smoke-check inactive plugin and VFX source
+        run: |
+          node --check external/pixelfx/src/core/index.js
+          node --check external/pixelfx/src/fx/ice/frost-nova.js
+          node --check external/pixelfx/src/fx/lightning/chain-lightning.js
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import {readFileSync,existsSync} from 'node:fs';
+          const read=(p)=>JSON.parse(readFileSync(p,'utf8'));
+          assert.equal(read('external/claude-gamedev-kit/.claude-plugin/plugin.json').name,'gamedev-kit');
+          assert.equal(read('external/plinkfx/package.json').name,'plinkfx');
+          assert.equal(read('external/pixelfx/package.json').name,'pixelfx');
+          for(const name of ['router','dream-loop','plinkfx','pixelfx']) {
+            const path=name==='router'?'external/awesome-gamedev-agent-skills/router/SKILL.md':name==='dream-loop'?'external/dream-loop/SKILL.md':name==='plinkfx'?'external/plinkfx/skills/plinkfx/SKILL.md':'external/pixelfx/skills/pixelfx/SKILL.md';
+            assert.ok(existsSync(path),path);
+          }
+          console.log('External tool metadata and PixelFX syntax smoke checks passed');
+          JS
+          python3 - <<'PY'
+          import ast
+          from pathlib import Path
+          root=Path('external/claude-gamedev-kit')
+          scripts=list(root.glob('skills/*/scripts/*.py'))+list(root.glob('hooks/*.py'))
+          assert scripts, 'Expected kit Python scripts'
+          for path in scripts:
+              ast.parse(path.read_text(), filename=str(path))
+          print(f'GameDev Kit Python syntax checks passed: {len(scripts)} scripts')
+          PY
