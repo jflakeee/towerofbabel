@@ -1,0 +1,29 @@
+{
+  "engine": "web",
+  "models": "standard",
+  "gdd-sync": {
+    "code_ext": [
+      ".js",
+      ".mjs",
+      ".html",
+      ".css",
+      ".json"
+    ],
+    "skip_dirs": [
+      ".git",
+      ".claude",
+      "node_modules",
+      "build",
+      "docs",
+      "data"
+    ],
+    "symbol": "(?:const|let|var|function|class)\\s+([A-Za-z_$][A-Za-z0-9_$]*)"
+  },
+  "balance-table": {
+    "code": "game/balance.js",
+    "table": "data/balance.xlsx",
+    "line": "^(export const )([A-Z][A-Z0-9_]*)( = )(-?\\d+(?:\\.\\d+)?)(;\\s*(?://.*)?)$",
+    "doc_prefix": "///",
+    "comment": "//"
+  }
+}
