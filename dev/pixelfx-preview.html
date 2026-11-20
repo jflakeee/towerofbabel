@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BABEL — PixelFX isolated preview</title>
+<style>
+:root{color-scheme:dark;font:16px system-ui,sans-serif;background:#0b1118;color:#e2e9eb}
+body{max-width:740px;margin:0 auto;padding:20px}
+button{padding:12px 16px;border:1px solid #65787e;border-radius:10px;background:#22343b;color:white;cursor:pointer;font:inherit}
+button[aria-pressed=true]{background:#39636e}
+canvas{display:block;width:100%;max-width:576px;aspect-ratio:3/2;image-rendering:pixelated;background:#111d29;border:1px solid #3d5962;border-radius:10px}
+.controls{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0}
+p{line-height:1.6;color:#bacbd1}
+</style>
+</head>
+<body>
+<h1>PixelFX 독립 미리보기</h1>
+<p>게임 저장·전투·설정과 분리된 개발 전용 화면입니다. 공개 배포 빌드에는 포함되지 않습니다.</p>
+<div class="controls"><button type="button" id="ice" aria-pressed="true">서리 폭발</button><button type="button" id="lightning" aria-pressed="false">연쇄 번개</button><button type="button" id="replay">다시 재생</button><button type="button" id="pause">일시 정지</button></div>
+<canvas id="preview" width="288" height="192" role="img" aria-label="픽셀 이펙트 미리보기"></canvas>
+<p id="status" role="status">모듈 로딩 중…</p>
+<script type="module">
+import {createFx,createFrame,clearFrame,composite} from '../external/pixelfx/src/core/index.js';
+import * as ice from '../external/pixelfx/src/fx/ice/frost-nova.js';
+import * as lightning from '../external/pixelfx/src/fx/lightning/chain-lightning.js';
+const canvas=document.getElementById('preview'),ctx=canvas.getContext('2d',{alpha:false});
+const status=document.getElementById('status');
+const frame=createFrame(288,192),rgba=new Uint8ClampedArray(288*192*4),pixels=new ImageData(rgba,288,192);
+let active=ice,fx=null,paused=false,last=0,raf=0;
+function reset(){fx=createFx(active,{x:144,y:130,seed:4});last=0;status.textContent=active.meta.name+' · '+active.meta.duration+'초 · 게임과 분리된 미리보기';}
+function choose(mod){active=mod;for(const [id,m] of [['ice',ice],['lightning',lightning]])document.getElementById(id).setAttribute('aria-pressed',String(m===mod));reset();}
+document.getElementById('ice').addEventListener('click',()=>choose(ice));
+document.getElementById('lightning').addEventListener('click',()=>choose(lightning));
+document.getElementById('replay').addEventListener('click',reset);
+document.getElementById('pause').addEventListener('click',e=>{paused=!paused;e.currentTarget.textContent=paused?'재생':'일시 정지';last=0;});
+function tick(now){
+ raf=requestAnimationFrame(tick);
+ if(document.hidden||paused){last=0;return;}
+ const dt=last?Math.min((now-last)/1000,.05):0;last=now;
+ if(fx.done())reset();
+ fx.update(dt);
+ clearFrame(frame);
+ fx.draw(frame);
+ composite(frame,rgba);
+ ctx.fillStyle='#111d29';ctx.fillRect(0,0,288,192);
+ ctx.putImageData(pixels,0,0);
+}
+reset();raf=requestAnimationFrame(tick);
+window.addEventListener('pagehide',()=>cancelAnimationFrame(raf),{once:true});
+</script>
+</body>
+</html>
