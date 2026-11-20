@@ -6,11 +6,19 @@
 
 모바일 웹 · Canvas 2D · PWA · 오프라인 지원
 
-[게임 실행](https://jflakeee.github.io/towerofbabel/) · [기능 소개](#주요-플레이) · [로컬 실행](#실행) · [개발 현황](#개발-현황) · [설계 문서](docs/current-design.md)
+[▶ 웹 데모 플레이](https://jflakeee.github.io/towerofbabel/) · [기능 소개](#주요-플레이) · [로컬 실행](#실행) · [개발 현황](#개발-현황) · [설계 문서](docs/current-design.md)
 
 </div>
 
 > **프로젝트 상태**: 플레이 가능한 독립 프로토타입입니다. 위 게임 링크는 GitHub Pages의 기본 주소이며, 실제 서비스 가능 여부는 [배포 Actions](https://github.com/jflakeee/towerofbabel/actions/workflows/pages.yml)에서 확인하세요. 개발용 PixelFX 미리보기는 공개 게임에 아직 반영하지 않았습니다.
+
+## 🎮 데모 바로가기
+
+**[▶ BABEL 모바일 웹 데모 실행](https://jflakeee.github.io/towerofbabel/)**
+
+휴대폰 또는 PC 브라우저에서 실행할 수 있는 GitHub Pages 주소입니다. 모바일에서는 터치 조이스틱으로 이동하며 공격과 스킬 사용은 자동 처리됩니다.
+
+> 데모는 `main` 브랜치의 공개 배포 버전입니다. 현재 작업 브랜치의 PixelFX 미리보기 및 실험 기능은 포함되지 않을 수 있습니다. 접속·배포 상태는 [GitHub Pages 배포 기록](https://github.com/jflakeee/towerofbabel/actions/workflows/pages.yml)에서 확인하세요.
 
 ## 주요 플레이
 
