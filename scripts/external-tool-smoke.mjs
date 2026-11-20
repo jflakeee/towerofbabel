@@ -31,8 +31,10 @@ for(const [path,expected] of [
   core.clearFrame(frame);
   fx.update(1/30);
   fx.draw(frame);
-  core.composite(frame,rgba);
-  nonEmpty+=rgba.some(v=>v!==0)?1:0;
+  core.composite(frame,rgba,0x291d11);
+  assert.equal(rgba[3],255,'opaque preview alpha');
+  assert.equal(rgba.at(-1),255,'opaque preview last alpha');
+  nonEmpty+=rgba.some((v,i)=>i%4!==3&&v!==[17,29,41][i%4])?1:0;
  }
  assert.ok(nonEmpty>0,expected+' produced no visible pixels');
  console.log(JSON.stringify({effect:effect.meta.name,duration:effect.meta.duration,renderedFrames:10,nonEmptyFrames:nonEmpty,source:path}));
