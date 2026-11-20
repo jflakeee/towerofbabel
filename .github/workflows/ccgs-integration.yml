@@ -84,6 +84,8 @@ jobs:
           test -f external/plinkfx/package.json
           test -f external/pixelfx/package.json
           echo 'All six development submodules checked out successfully'
+      - name: Import actual PixelFX modules (isolated)
+        run: node scripts/external-tool-smoke.mjs
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
