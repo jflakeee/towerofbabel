@@ -66,3 +66,21 @@ jobs:
         run: node scripts/growth-audit.mjs
       - name: Arena preview economy audit
         run: node scripts/arena-economy-audit.mjs
+
+  external-tool-submodules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          persist-credentials: false
+      - name: Validate six pinned repositories
+        run: |
+          git submodule status
+          test -f external/awesome-gamedev-agent-skills/router/SKILL.md
+          test -f external/Claude-Code-Game-Studios/README.md
+          test -f external/claude-gamedev-kit/.claude-plugin/plugin.json
+          test -f external/dream-loop/SKILL.md
+          test -f external/plinkfx/package.json
+          test -f external/pixelfx/package.json
+          echo 'All six development submodules checked out successfully'
