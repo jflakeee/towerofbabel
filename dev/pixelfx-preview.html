@@ -41,8 +41,7 @@ function tick(now){
  fx.update(dt);
  clearFrame(frame);
  fx.draw(frame);
- composite(frame,rgba);
- ctx.fillStyle='#111d29';ctx.fillRect(0,0,288,192);
+ composite(frame,rgba,0x291d11); // Opaque #111d29 background (packed RGB little-endian).
  ctx.putImageData(pixels,0,0);
 }
 reset();raf=requestAnimationFrame(tick);
