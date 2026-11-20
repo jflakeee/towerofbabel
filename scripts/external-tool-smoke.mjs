@@ -23,6 +23,18 @@ for(const [path,expected] of [
  assert.equal(effect.meta.name,expected);
  assert.ok(effect.meta.duration>0);
  assert.equal(typeof effect.create,'function');
- console.log(JSON.stringify({effect:effect.meta.name,duration:effect.meta.duration,source:path}));
+ const fx=core.createFx(effect,{x:144,y:96,seed:4});
+ const frame=core.createFrame(288,192);
+ const rgba=new Uint8ClampedArray(frame.w*frame.h*4);
+ let nonEmpty=0;
+ for(let i=0;i<10;i++){
+  core.clearFrame(frame);
+  fx.update(1/30);
+  fx.draw(frame);
+  core.composite(frame,rgba);
+  nonEmpty+=rgba.some(v=>v!==0)?1:0;
+ }
+ assert.ok(nonEmpty>0,expected+' produced no visible pixels');
+ console.log(JSON.stringify({effect:effect.meta.name,duration:effect.meta.duration,renderedFrames:10,nonEmptyFrames:nonEmpty,source:path}));
 }
 console.log('External game tooling import smoke check passed (no runtime/game modification)');
