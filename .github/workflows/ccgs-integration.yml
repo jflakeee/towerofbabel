@@ -122,3 +122,27 @@ jobs:
               ast.parse(path.read_text(), filename=str(path))
           print(f'GameDev Kit Python syntax checks passed: {len(scripts)} scripts')
           PY
+
+  pixelfx-browser-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install isolated browser test dependency
+        run: |
+          npm install --no-save --no-package-lock playwright
+          npx playwright install --with-deps chromium
+      - name: Validate preview in Chromium mobile viewport
+        run: node scripts/pixelfx-browser-smoke.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pixelfx-mobile-preview-screenshots
+          path: pixelfx-*-mobile.png
+          if-no-files-found: ignore
