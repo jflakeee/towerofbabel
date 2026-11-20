@@ -3,6 +3,14 @@
 모바일 우선 서바이버 액션 RPG의 플레이 가능한 PWA 프로토타입입니다.
 벤치마크는 NANOO의 [Tower of Babel: Survivors of Chaos](https://store.steampowered.com/app/2665680/Tower_of_Babel_Survivors_of_Chaos/?l=koreana)입니다. 원작의 공식 모바일 포팅이 아니며, 원작 이미지·음원·코드·캐릭터 에셋을 포함하지 않습니다.
 
+## 🎮 웹 데모 플레이
+
+**[▶ BABEL · 잿빛 탑 — 게임 바로 실행](https://jflakeee.github.io/towerofbabel/)**
+
+PC 및 모바일 브라우저에서 플레이할 수 있는 GitHub Pages 데모입니다. 모바일에서는 터치 조이스틱으로 이동하고 공격은 자동으로 진행됩니다.
+
+> 이전 버전의 오프라인 캐시로 화면이 열리지 않으면 시크릿 창에서 접속해 보세요. 기존 브라우저의 게임 저장 데이터(Local Storage)는 삭제하지 마세요.
+
 ## 실행
 
 Node.js 20 이상, Python 3가 있으면 외부 패키지 설치 없이 실행할 수 있습니다.
