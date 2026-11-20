@@ -1,7 +1,69 @@
+<div align="center">
+
 # BABEL · 잿빛 탑
 
-모바일 우선 서바이버 액션 RPG의 플레이 가능한 PWA 프로토타입입니다.
-벤치마크는 NANOO의 [Tower of Babel: Survivors of Chaos](https://store.steampowered.com/app/2665680/Tower_of_Babel_Survivors_of_Chaos/?l=koreana)입니다. 원작의 공식 모바일 포팅이 아니며, 원작 이미지·음원·코드·캐릭터 에셋을 포함하지 않습니다.
+**한 손으로 이동하고, 전투와 성장은 전략으로 완성하는 모바일 서바이버 RPG**
+
+모바일 웹 · Canvas 2D · PWA · 오프라인 지원
+
+[▶ 웹 데모 플레이](https://jflakeee.github.io/towerofbabel/) · [기능 소개](#주요-플레이) · [로컬 실행](#실행) · [개발 현황](#개발-현황) · [설계 문서](docs/current-design.md)
+
+</div>
+
+> **프로젝트 상태**: 플레이 가능한 독립 프로토타입입니다. 위 게임 링크는 GitHub Pages의 기본 주소이며, 실제 서비스 가능 여부는 [배포 Actions](https://github.com/jflakeee/towerofbabel/actions/workflows/pages.yml)에서 확인하세요. 개발용 PixelFX 미리보기는 공개 게임에 아직 반영하지 않았습니다.
+
+## 🎮 데모 바로가기
+
+**[▶ BABEL 모바일 웹 데모 실행](https://jflakeee.github.io/towerofbabel/)**
+
+휴대폰 또는 PC 브라우저에서 실행할 수 있는 GitHub Pages 주소입니다. 모바일에서는 터치 조이스틱으로 이동하며 공격과 스킬 사용은 자동 처리됩니다.
+
+> 데모는 `main` 브랜치의 공개 배포 버전입니다. 현재 작업 브랜치의 PixelFX 미리보기 및 실험 기능은 포함되지 않을 수 있습니다. 접속·배포 상태는 [GitHub Pages 배포 기록](https://github.com/jflakeee/towerofbabel/actions/workflows/pages.yml)에서 확인하세요.
+
+## 주요 플레이
+
+| 구분 | 내용 |
+| --- | --- |
+| **모바일 전투** | 터치 위치에서 시작하는 360° 가상 조이스틱, 자동 공격·조준·스킬 선택 |
+| **캐릭터** | 기사·술사·추적자, 직업별 전투 방식과 전용 축복 |
+| **진행** | 5개 층, 웨이브·수문장 보스, 일반·어려움·악몽과 혼돈 던전 |
+| **성장** | 장비 획득·자동 장착, 강화·소켓·보석·룬·연금술, 영구 성장 |
+| **전략** | 자동 빌드 우선순위, 회피·스킬 사용 조건, 직업별 프리셋 |
+| **저장** | 5초 간격 자동 저장, 이어하기, JSON 백업·복구, 다중 탭 쓰기 보호 |
+| **설치** | 모바일 브라우저 실행, 홈 화면 설치, 오프라인 캐시 |
+
+## 개발 현황
+
+| 항목 | 상태 |
+| --- | --- |
+| 기본 전투·성장·저장 | 프로토타입 구현 |
+| 자동 테스트 및 정적 빌드 | [GitHub Actions](https://github.com/jflakeee/towerofbabel/actions)에서 확인 |
+| PixelFX 서리 폭발·연쇄 번개 | 독립 Chromium 모바일 뷰포트 미리보기 테스트 통과 |
+| PixelFX 본 게임 전투 적용 | **미적용** — 개발 브랜치에서 검토 중 |
+| PlinkFX / 게임 개발 도구 | 외부 도구를 서브모듈로 고정; 게임 런타임 적용과 로컬 설치는 별개 |
+| 실제 Android/iOS 기기 테스트 | **미완료** |
+| 공개 배포 | `main` 기반 Pages, 개발 브랜치 변경은 자동 공개되지 않음 |
+
+개발 브랜치: [`chore/ccgs-integration-20261111`](https://github.com/jflakeee/towerofbabel/tree/chore/ccgs-integration-20261111) · [검토 중인 PR #23](https://github.com/jflakeee/towerofbabel/pull/23)
+
+### PixelFX 개발자 미리보기
+
+서리 폭발(Frost Nova)과 연쇄 번개(Chain Lightning)를 게임 상태와 분리해 렌더링합니다. 개발 브랜치를 클론하고 서브모듈을 초기화한 다음 로컬 서버에서 `/dev/pixelfx-preview.html`을 열면 됩니다. **게임 본편에는 아직 연결되지 않았습니다.**
+
+```sh
+git clone --recurse-submodules https://github.com/jflakeee/towerofbabel.git
+cd towerofbabel
+git switch chore/ccgs-integration-20261111
+git submodule update --init --recursive
+npm start
+# http://localhost:8080/dev/pixelfx-preview.html
+```
+
+브라우저 자동 검증은 `scripts/pixelfx-browser-smoke.mjs` 및 `.github/workflows/ccgs-integration.yml`을 참고하세요. 스크린샷은 해당 Actions 실행의 아티팩트에서 확인할 수 있습니다.
+
+## 프로젝트 소개
+
+이 프로젝트는 NANOO의 [Tower of Babel: Survivors of Chaos](https://store.steampowered.com/app/2665680/Tower_of_Babel_Survivors_of_Chaos/?l=koreana)를 **게임플레이 벤치마크**로 삼아 제작하는 별도 프로토타입입니다. 원작의 공식 모바일 포팅이 아니며, 원작 이미지·음원·코드·캐릭터 에셋을 포함하지 않습니다.
 
 ## 🎮 웹 데모 플레이
 

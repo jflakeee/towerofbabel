@@ -1,0 +1,9 @@
+{
+  "choose": {
+    "plays_on": [
+      "browsers, on a computer or a phone — shared by a link (itch.io, any web host)"
+    ],
+    "needs": "no editor; the kit sets up no wrapper for a store or a computer"
+  },
+  "marker": "index.html"
+}

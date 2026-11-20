@@ -1,0 +1,152 @@
+name: CCGS integration regression (no deploy)
+on:
+  push:
+    branches:
+      - chore/ccgs-integration-20261111
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.claude/**'
+      - 'CLAUDE.md'
+      - 'project.yaml'
+      - '.github/workflows/ccgs-integration.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate integration files and scripts
+        run: |
+          test -f CLAUDE.md
+          test -f project.yaml
+          test -f .claude/skills/start/SKILL.md
+          test -f .claude/skills/project-stage-detect/SKILL.md
+          test -f .claude/skills/map-systems/SKILL.md
+          for file in .claude/scripts/*.sh .claude/hooks/*.sh; do
+            bash -n "$file"
+          done
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          cfg = Path('project.yaml').read_text()
+          assert re.search(r'^  rigor: standard$', cfg, re.M)
+          assert re.search(r'^  automation: collaborative$', cfg, re.M)
+          for name in ('start', 'project-stage-detect', 'map-systems'):
+              text = Path(f'.claude/skills/{name}/SKILL.md').read_text()
+              assert text.startswith('---\n')
+              assert f'name: {name}' in text
+          print('CCGS static integration checks passed')
+          PY
+      - name: Execute CCGS diagnostic helpers
+        run: |
+          bash .claude/scripts/project-state.sh
+          bash .claude/hooks/yaml-helper.sh resolve_config --keys workflow,automation
+          bash .claude/scripts/artifact-check.sh
+  game-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm run check
+      - run: npm test
+      - run: npm run test:soak
+      - run: npm run build
+      - name: Pathfinding CPU baseline (synthetic)
+        run: node scripts/pathfinding-benchmark.mjs
+      - name: Seeded economy audit
+        run: node scripts/economy-audit.mjs
+      - name: Seeded hero growth audit
+        run: node scripts/growth-audit.mjs
+      - name: Arena preview economy audit
+        run: node scripts/arena-economy-audit.mjs
+
+  external-tool-submodules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          persist-credentials: false
+      - name: Validate six pinned repositories
+        run: |
+          git submodule status
+          test -f external/awesome-gamedev-agent-skills/router/SKILL.md
+          test -f external/Claude-Code-Game-Studios/README.md
+          test -f external/claude-gamedev-kit/.claude-plugin/plugin.json
+          test -f external/dream-loop/SKILL.md
+          test -f external/plinkfx/package.json
+          test -f external/pixelfx/package.json
+          echo 'All six development submodules checked out successfully'
+      - name: Import actual PixelFX modules (isolated)
+        run: node scripts/external-tool-smoke.mjs
+      - name: Validate isolated preview entrypoint
+        run: |
+          test -f dev/pixelfx-preview.html
+          grep -q "../external/pixelfx/src/core/index.js" dev/pixelfx-preview.html
+          grep -q 'requestAnimationFrame(tick)' dev/pixelfx-preview.html
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Smoke-check inactive plugin and VFX source
+        run: |
+          node --check external/pixelfx/src/core/index.js
+          node --check external/pixelfx/src/fx/ice/frost-nova.js
+          node --check external/pixelfx/src/fx/lightning/chain-lightning.js
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import {readFileSync,existsSync} from 'node:fs';
+          const read=(p)=>JSON.parse(readFileSync(p,'utf8'));
+          assert.equal(read('external/claude-gamedev-kit/.claude-plugin/plugin.json').name,'gamedev-kit');
+          assert.equal(read('external/plinkfx/package.json').name,'plinkfx');
+          assert.equal(read('external/pixelfx/package.json').name,'pixelfx');
+          for(const name of ['router','dream-loop','plinkfx','pixelfx']) {
+            const path=name==='router'?'external/awesome-gamedev-agent-skills/router/SKILL.md':name==='dream-loop'?'external/dream-loop/SKILL.md':name==='plinkfx'?'external/plinkfx/skills/plinkfx/SKILL.md':'external/pixelfx/skills/pixelfx/SKILL.md';
+            assert.ok(existsSync(path),path);
+          }
+          console.log('External tool metadata and PixelFX syntax smoke checks passed');
+          JS
+          python3 - <<'PY'
+          import ast
+          from pathlib import Path
+          root=Path('external/claude-gamedev-kit')
+          scripts=list(root.glob('skills/*/scripts/*.py'))+list(root.glob('hooks/*.py'))
+          assert scripts, 'Expected kit Python scripts'
+          for path in scripts:
+              ast.parse(path.read_text(), filename=str(path))
+          print(f'GameDev Kit Python syntax checks passed: {len(scripts)} scripts')
+          PY
+
+  pixelfx-browser-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install isolated browser test dependency
+        run: |
+          npm install --no-save --no-package-lock playwright
+          npx playwright install --with-deps chromium
+      - name: Validate preview in Chromium mobile viewport
+        run: node scripts/pixelfx-browser-smoke.mjs
+      - name: Build game and verify service worker recovery in Chromium
+        run: |
+          npm run build
+          node scripts/sw-browser-smoke.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pixelfx-mobile-preview-screenshots
+          path: pixelfx-*-mobile.png
+          if-no-files-found: ignore

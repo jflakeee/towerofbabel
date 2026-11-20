@@ -25,13 +25,15 @@ export function segmentCircleTime(a,b,center,r){
 }
 export function firstWallTime(game,a,b,r=0){
  let first=Infinity;
+ const dx=b.x-a.x,dy=b.y-a.y;
  for(const o of gameObstacles(game)){
-  let lo=0,hi=1,hit=true;
-  for(const [axis,min,max] of [['x',o.x-r,o.x+o.w+r],['y',o.y-r,o.y+o.h+r]]){
-   const delta=b[axis]-a[axis];if(Math.abs(delta)<1e-9){if(a[axis]<min||a[axis]>max){hit=false;break;}}
-   else{const t1=(min-a[axis])/delta,t2=(max-a[axis])/delta;lo=Math.max(lo,Math.min(t1,t2));hi=Math.min(hi,Math.max(t1,t2));if(lo>hi){hit=false;break;}}
-  }
-  if(hit)first=Math.min(first,lo);
+  let lo=0,hi=1;
+  const minX=o.x-r,maxX=o.x+o.w+r,minY=o.y-r,maxY=o.y+o.h+r;
+  if(Math.abs(dx)<1e-9){if(a.x<minX||a.x>maxX)continue;}
+  else{const t1=(minX-a.x)/dx,t2=(maxX-a.x)/dx;lo=Math.max(lo,Math.min(t1,t2));hi=Math.min(hi,Math.max(t1,t2));if(lo>hi)continue;}
+  if(Math.abs(dy)<1e-9){if(a.y<minY||a.y>maxY)continue;}
+  else{const t1=(minY-a.y)/dy,t2=(maxY-a.y)/dy;lo=Math.max(lo,Math.min(t1,t2));hi=Math.min(hi,Math.max(t1,t2));if(lo>hi)continue;}
+  first=Math.min(first,lo);
  }
  return first;
 }
@@ -42,13 +44,13 @@ function routeTarget(game,e,p){const cached=e.route;if(cached&&game.time<cached.
  // A* uses straight-line distance as a consistent lower bound. It preserves
  // shortest paths on this visibility graph without expanding distant detours.
  const heuristic=nodes.map(node=>Math.hypot(node.x-p.x,node.y-p.y));
- const scores=nodes.map(()=>Infinity),prev=nodes.map(()=>-1),visited=new Set();scores[0]=0;
+ const scores=nodes.map(()=>Infinity),prev=nodes.map(()=>-1),visited=new Uint8Array(nodes.length);scores[0]=0;
  for(let n=0;n<nodes.length;n++){
   let at=-1;
-  for(let i=0;i<nodes.length;i++)if(!visited.has(i)&&(at<0||scores[i]+heuristic[i]<scores[at]+heuristic[at]))at=i;
+  for(let i=0;i<nodes.length;i++)if(!visited[i]&&(at<0||scores[i]+heuristic[i]<scores[at]+heuristic[at]))at=i;
   if(at<0||!Number.isFinite(scores[at])||at===1)break;
-  visited.add(at);
-  for(let i=1;i<nodes.length;i++)if(!visited.has(i)){
+  visited[at]=1;
+  for(let i=1;i<nodes.length;i++)if(!visited[i]){
    const score=scores[at]+Math.hypot(nodes[i].x-nodes[at].x,nodes[i].y-nodes[at].y);
    // An edge that cannot improve the route needs no wall intersection work.
    if(score<scores[i]&&clearLine(game,nodes[at],nodes[i],e.r+1)){scores[i]=score;prev[i]=at;}
