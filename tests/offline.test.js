@@ -31,3 +31,17 @@ test('HTTP error on replacement installation preserves old bundle',async()=>{
  assert.deepEqual(await caches.keys(),['babel-mobile-/towerofbabel/@old']);
  assert.equal(await (await old.request(scope+'src/app.js')).text(),'app-1');
 });
+
+test('online navigation prefers live entry, offline navigation preserves cached entry',async()=>{
+ let offline=false,updated=false;
+ const w=worker({fetchBody:path=>{
+  if(offline)throw Error('offline');
+  return new Response(path==='./index.html'?(updated?'index-2':'index-1'):'app-1');
+ }});
+ await w.emit('install');
+ updated=true;
+ assert.equal(await (await w.request(scope,'navigate')).text(),'index-2');
+ offline=true;
+ assert.equal(await (await w.request(scope,'navigate')).text(),'index-1');
+ assert.equal(await (await w.request(scope+'src/app.js')).text(),'app-1');
+});
