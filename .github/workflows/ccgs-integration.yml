@@ -86,6 +86,11 @@ jobs:
           echo 'All six development submodules checked out successfully'
       - name: Import actual PixelFX modules (isolated)
         run: node scripts/external-tool-smoke.mjs
+      - name: Validate isolated preview entrypoint
+        run: |
+          test -f dev/pixelfx-preview.html
+          grep -q "../external/pixelfx/src/core/index.js" dev/pixelfx-preview.html
+          grep -q 'requestAnimationFrame(tick)' dev/pixelfx-preview.html
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
