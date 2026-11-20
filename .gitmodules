@@ -1,0 +1,23 @@
+[submodule "external/awesome-gamedev-agent-skills"]
+	path = external/awesome-gamedev-agent-skills
+	url = https://github.com/gamedev-skills/awesome-gamedev-agent-skills.git
+
+[submodule "external/Claude-Code-Game-Studios"]
+	path = external/Claude-Code-Game-Studios
+	url = https://github.com/Donchitos/Claude-Code-Game-Studios.git
+
+[submodule "external/claude-gamedev-kit"]
+	path = external/claude-gamedev-kit
+	url = https://github.com/dudwns0921/claude-gamedev-kit.git
+
+[submodule "external/dream-loop"]
+	path = external/dream-loop
+	url = https://github.com/achimala/dream-loop.git
+
+[submodule "external/plinkfx"]
+	path = external/plinkfx
+	url = https://github.com/maximilianfeix/plinkfx.git
+
+[submodule "external/pixelfx"]
+	path = external/pixelfx
+	url = https://github.com/patch-gg/pixelfx.git
