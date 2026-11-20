@@ -140,6 +140,10 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Validate preview in Chromium mobile viewport
         run: node scripts/pixelfx-browser-smoke.mjs
+      - name: Build game and verify service worker recovery in Chromium
+        run: |
+          npm run build
+          node scripts/sw-browser-smoke.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
