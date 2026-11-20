@@ -40,8 +40,8 @@ try{
  await page.waitForTimeout(600);
  await check('Chain lightning','pixelfx-lightning-mobile.png');
  await page.getByRole('button',{name:'일시 정지'}).click();
- assert.equal(await page.getByRole('button',{name:'재생'}).count(),1);
- await page.getByRole('button',{name:'재생'}).click();
+ assert.equal(await page.getByRole('button',{name:'재생',exact:true}).count(),1);
+ await page.getByRole('button',{name:'재생',exact:true}).click();
  await page.getByRole('button',{name:'다시 재생'}).click();
  assert.deepEqual(errors,[],'browser errors');
  console.log('PixelFX Chromium mobile-viewport preview passed');
