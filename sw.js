@@ -17,5 +17,12 @@ self.addEventListener('fetch',event=>{
  if(event.request.method!=='GET')return;const url=new URL(event.request.url),scope=new URL(self.registration.scope);if(url.origin!==scope.origin||!url.pathname.startsWith(scope.pathname))return;
  url.search='';url.hash='';let key=url.href;if(event.request.mode==='navigate'&&(url.pathname===scope.pathname||url.pathname===scope.pathname+'index.html'))key=assetURL('./index.html');
  if(!assets.has(key))return;
- event.respondWith((async()=>{const cache=await caches.open(CACHE),cached=await cache.match(key);if(cached)return cached;try{const response=await fetch(new Request(key,{cache:'reload'}));if(!response.ok)throw Error('Missing asset');const expected=ASSET_HASHES[assets.get(key)];if(expected){const digest=await crypto.subtle.digest('SHA-256',await response.clone().arrayBuffer());const actual=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');if(actual!==expected)throw Error('Wrong version');}await cache.put(key,response.clone());return response;}catch{}return new Response('게임 파일이 없습니다. 온라인에서 다시 열어 주세요.',{status:503,headers:{'Content-Type':'text/plain; charset=utf-8'}});})());
+ event.respondWith((async()=>{
+  // Prefer the current deployed entry page while online: an older cached index
+  // can refer to versioned JS files already removed by a newer Pages deployment.
+  // Keep the verified cached entry as the offline fallback without rewriting it.
+  if(event.request.mode==='navigate'&&key===assetURL('./index.html')){
+   try{const live=await fetch(new Request(key,{cache:'no-store'}));if(live.ok)return live;}catch{}
+  }
+  const cache=await caches.open(CACHE),cached=await cache.match(key);if(cached)return cached;try{const response=await fetch(new Request(key,{cache:'reload'}));if(!response.ok)throw Error('Missing asset');const expected=ASSET_HASHES[assets.get(key)];if(expected){const digest=await crypto.subtle.digest('SHA-256',await response.clone().arrayBuffer());const actual=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');if(actual!==expected)throw Error('Wrong version');}await cache.put(key,response.clone());return response;}catch{}return new Response('게임 파일이 없습니다. 온라인에서 다시 열어 주세요.',{status:503,headers:{'Content-Type':'text/plain; charset=utf-8'}});})());
 });
