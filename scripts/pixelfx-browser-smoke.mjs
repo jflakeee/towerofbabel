@@ -43,6 +43,23 @@ try{
  assert.equal(await page.getByRole('button',{name:'재생',exact:true}).count(),1);
  await page.getByRole('button',{name:'재생',exact:true}).click();
  await page.getByRole('button',{name:'다시 재생'}).click();
+ // Exercise repeated switching and verify the preview does not leak RAF loops or fail.
+ for(let i=0;i<12;i++){
+  await page.getByRole('button',{name:i%2?'서리 폭발':'연쇄 번개'}).click();
+  await page.waitForTimeout(80);
+ }
+ const metrics=await page.evaluate(()=>({
+  width:document.documentElement.scrollWidth,
+  viewport:window.innerWidth,
+  canvasWidth:document.querySelector('canvas').width,
+  canvasHeight:document.querySelector('canvas').height,
+  status:document.querySelector('#status').textContent
+ }));
+ assert.ok(metrics.width<=metrics.viewport+1,'mobile horizontal overflow');
+ assert.equal(metrics.canvasWidth,288);
+ assert.equal(metrics.canvasHeight,192);
+ assert.ok(metrics.status.includes('Frost nova'));
+ console.log(JSON.stringify({mobilePreview:metrics,rapidSwitches:12}));
  assert.deepEqual(errors,[],'browser errors');
  console.log('PixelFX Chromium mobile-viewport preview passed');
 }finally{
